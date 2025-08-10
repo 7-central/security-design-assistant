@@ -2,15 +2,21 @@
 
 ## Repository Structure
 
-### Organization Hierarchy
+### Current Repository Structure
 ```
-RICG777 (Account Owner)
+7-central (Account Owner)
+├── Username: 7-central  
+├── Email: info@7central.co.uk
 └── security-design-assistant (Repository)
     ├── main (Production branch)
     └── develop (Staging branch)
+    └── Collaborators:
+        └── junksamiad (Lee Hayton) - Push access
 ```
 
-*Note: Final structure to be determined after investigating RICG777's account. May include 7Central organization if beneficial.*
+**Repository URL**: https://github.com/7-central/security-design-assistant
+
+*Note: Future expansion planned for 7Central GitHub Organization with separate repos for Security, Argan-HR, and Tier8 business units.*
 
 ## Repository Configuration
 
@@ -49,15 +55,18 @@ RICG777 (Account Owner)
 
 ### Collaborators
 
-1. **RICG777** - Owner
+1. **7-central** - Owner
+   - Account: info@7central.co.uk
    - Full repository access
    - Settings management
    - Deployment approvals
+   - Personal Access Token configured for CI/CD
 
-2. **junksamiad** (Lee) - Developer
-   - Write access
-   - Create branches
-   - Open pull requests
+2. **junksamiad** (Lee Hayton) - Developer  
+   - Email: junksamiad@gmail.com
+   - Push access granted
+   - Create branches and pull requests
+   - Local development and commits
 
 ### Development Workflow
 
@@ -75,31 +84,44 @@ graph LR
 ### Initial Setup
 
 ```bash
-# Configure git identity
+# Configure git identity (for commits)
 git config user.name "Lee Hayton"
-git config user.email "your-email@example.com"
+git config user.email "junksamiad@gmail.com"
 
 # Add remote repository
-git remote add origin https://github.com/RICG777/security-design-assistant.git
+git remote add origin https://github.com/7-central/security-design-assistant.git
 
-# Verify remote
+# Verify remote configuration
 git remote -v
 ```
 
 ### Authentication
 
-For pushing to RICG777's repository from junksamiad account:
+For pushing to 7-central's repository from junksamiad account:
 
 ```bash
-# Option 1: Use GitHub Personal Access Token
-git remote set-url origin https://RICG777:TOKEN@github.com/RICG777/security-design-assistant.git
+# Current setup: junksamiad has been added as collaborator with push access
+# Standard HTTPS authentication will work with GitHub credentials
 
-# Option 2: Use SSH key (if configured)
-git remote set-url origin git@github.com:RICG777/security-design-assistant.git
-
-# Option 3: Use GitHub CLI
+# Option 1: Use GitHub CLI (Recommended)
 gh auth login
-gh repo clone RICG777/security-design-assistant
+# Then work normally with git commands
+
+# Option 2: Use Personal Access Token (if needed)
+git remote set-url origin https://junksamiad:TOKEN@github.com/7-central/security-design-assistant.git
+
+# Option 3: Use SSH key (if configured)
+git remote set-url origin git@github.com:7-central/security-design-assistant.git
+```
+
+### Current Configuration Status
+
+```bash
+# Repository details
+Repository: 7-central/security-design-assistant
+Owner: 7-central (info@7central.co.uk)
+Collaborator: junksamiad (junksamiad@gmail.com) with push access
+Local git user: Lee Hayton <junksamiad@gmail.com>
 ```
 
 ## Branch Strategy

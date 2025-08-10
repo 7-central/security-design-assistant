@@ -11,6 +11,12 @@ The Security Design Assistant streamlines the process of creating security equip
 - Generates detailed Excel schedules with component counts and locations
 - Ensures accuracy through multi-stage validation
 
+## Repository Information
+
+**Repository**: https://github.com/7-central/security-design-assistant  
+**Owner**: 7-central (info@7central.co.uk)  
+**Developer**: junksamiad (junksamiad@gmail.com)
+
 ## Quick Start
 
 For detailed setup instructions, see:
