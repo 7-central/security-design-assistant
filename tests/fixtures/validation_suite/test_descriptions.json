@@ -1,0 +1,170 @@
+{
+  "test_set_version": "1.0",
+  "created_date": "2025-08-10",
+  "total_drawings": 10,
+  "description": "Comprehensive test suite for validation of security drawing analysis pipeline",
+  "drawings": {
+    "01_baseline_b2_drawing.pdf": {
+      "source": "example_b2_drawing.pdf",
+      "complexity": "standard",
+      "description": "Single page security drawing with standard door/reader/exit button components",
+      "characteristics": [
+        "Clear annotations with A-prefix IDs",
+        "Standard component symbols",
+        "Good scan quality",
+        "Single level layout"
+      ],
+      "expected_assessment": "Good",
+      "test_focus": "Baseline functionality verification",
+      "challenge_level": "Low"
+    },
+    "02_complex_multipage_drawing.pdf": {
+      "source": "103P3-E34-QCI-40098_Ver1.pdf",
+      "complexity": "complex",
+      "description": "Multi-page complex drawing with mixed security and non-security pages",
+      "characteristics": [
+        "Dense annotations with overlapping text",
+        "Multiple pages requiring filtering",
+        "Complex spatial relationships",
+        "Mixed system components"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "Page filtering and complex spatial analysis",
+      "challenge_level": "High"
+    },
+    "03_simple_single_door.pdf": {
+      "source": "to_be_created",
+      "complexity": "simple",
+      "description": "Minimal complexity drawing with 1-2 doors for basic verification",
+      "characteristics": [
+        "Single door with reader",
+        "Minimal annotations",
+        "Clear component placement",
+        "Standard ID format"
+      ],
+      "expected_assessment": "Good",
+      "test_focus": "Basic component extraction",
+      "challenge_level": "Very Low"
+    },
+    "04_dense_annotations.pdf": {
+      "source": "to_be_created",
+      "complexity": "complex",
+      "description": "Drawing with overlapping text and dense annotations",
+      "characteristics": [
+        "Overlapping component labels",
+        "Dense text annotations",
+        "Cluttered layout",
+        "Multiple annotation layers"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "Text extraction from dense layouts",
+      "challenge_level": "High"
+    },
+    "05_multi_level_floor_plan.pdf": {
+      "source": "to_be_created",
+      "complexity": "complex",
+      "description": "Multi-level floor plan with elevation references",
+      "characteristics": [
+        "Multiple floor levels",
+        "Elevation callouts",
+        "Cross-level component references",
+        "Spatial complexity"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "Multi-level spatial understanding",
+      "challenge_level": "High"
+    },
+    "06_mixed_systems.pdf": {
+      "source": "to_be_created",
+      "complexity": "complex",
+      "description": "Drawing combining access control with CCTV/fire systems",
+      "characteristics": [
+        "Access control components",
+        "CCTV cameras and DVR",
+        "Fire alarm devices",
+        "System integration points"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "System differentiation and filtering",
+      "challenge_level": "Medium"
+    },
+    "07_poor_scan_quality.pdf": {
+      "source": "to_be_created",
+      "complexity": "simple",
+      "description": "Low resolution/grainy scan quality drawing",
+      "characteristics": [
+        "Low resolution scan",
+        "Grainy or pixelated text",
+        "Unclear component boundaries",
+        "Poor contrast"
+      ],
+      "expected_assessment": "Poor",
+      "test_focus": "OCR and image quality handling",
+      "challenge_level": "High"
+    },
+    "08_rotated_skewed.pdf": {
+      "source": "to_be_created",
+      "complexity": "standard",
+      "description": "Drawing with rotation or skew orientation challenges",
+      "characteristics": [
+        "Rotated page orientation",
+        "Skewed scan alignment",
+        "Non-standard viewing angle",
+        "Text rotation variations"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "Orientation normalization",
+      "challenge_level": "Medium"
+    },
+    "09_nonstandard_component_ids.pdf": {
+      "source": "to_be_created",
+      "complexity": "standard",
+      "description": "Drawing with non-standard component ID formats",
+      "characteristics": [
+        "Variations like A.101.DR.B2",
+        "Mixed ID formatting",
+        "Unconventional numbering",
+        "Non-standard prefixes"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "ID pattern recognition flexibility",
+      "challenge_level": "Medium"
+    },
+    "10_emergency_exit_focused.pdf": {
+      "source": "to_be_created",
+      "complexity": "standard",
+      "description": "Drawing emphasizing emergency exits and exit buttons",
+      "characteristics": [
+        "Multiple emergency exits",
+        "Exit button components",
+        "Emergency door hardware",
+        "Egress path indicators"
+      ],
+      "expected_assessment": "Fair",
+      "test_focus": "Emergency component recognition",
+      "challenge_level": "Medium"
+    }
+  },
+  "success_criteria": {
+    "minimum_good_rate": 0.6,
+    "maximum_poor_rate": 0.2,
+    "minimum_confidence": 0.7
+  },
+  "test_categories": {
+    "complexity_levels": {
+      "simple": 2,
+      "standard": 4,
+      "complex": 4
+    },
+    "challenge_types": {
+      "scan_quality": 1,
+      "orientation": 1,
+      "dense_annotations": 1,
+      "multi_level": 1,
+      "mixed_systems": 1,
+      "emergency_focus": 1,
+      "id_variations": 1,
+      "baseline": 3
+    }
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "drawing_number": "SEC-B2-L2-001",
+    "project": "7Central Security System Installation",
+    "date": "2025-02-06",
+    "building": "B2",
+    "level": "2",
+    "total_doors": 15,
+    "total_card_readers": 13,
+    "total_exit_buttons": 7,
+    "total_locks": 15
+  },
+  "doors": [
+    {
+      "id": "A-101-DR-B2",
+      "location": "Main Entrance",
+      "components": ["Card Reader", "Exit Button"]
+    },
+    {
+      "id": "A-102-DR-B2",
+      "location": "Conference Room A",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-103-DR-B2",
+      "location": "Office 201",
+      "components": ["Card Reader", "Exit Button"]
+    },
+    {
+      "id": "A-104-DR-B2",
+      "location": "Office 202",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-105-DR-B2",
+      "location": "Emergency Exit North",
+      "components": ["Exit Button Only"]
+    },
+    {
+      "id": "A-106-DR-B2",
+      "location": "Server Room",
+      "components": ["Card Reader", "Biometric"]
+    },
+    {
+      "id": "A-107-DR-B2",
+      "location": "Storage Room",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-108-DR-B2",
+      "location": "Break Room",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-109-DR-B2",
+      "location": "Office 203",
+      "components": ["Card Reader", "Exit Button"]
+    },
+    {
+      "id": "A-110-DR-B2",
+      "location": "Office 204",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-111-DR-B2",
+      "location": "Conference Room B",
+      "components": ["Card Reader", "Exit Button"]
+    },
+    {
+      "id": "A-112-DR-B2",
+      "location": "Emergency Exit South",
+      "components": ["Exit Button Only"]
+    },
+    {
+      "id": "A-113-DR-B2",
+      "location": "IT Room",
+      "components": ["Card Reader", "Biometric"]
+    },
+    {
+      "id": "A-114-DR-B2",
+      "location": "Office 205",
+      "components": ["Card Reader"]
+    },
+    {
+      "id": "A-115-DR-B2",
+      "location": "Office 206",
+      "components": ["Card Reader", "Exit Button"]
+    }
+  ],
+  "card_readers": [
+    "A-101-CR-B2", "A-102-CR-B2", "A-103-CR-B2", "A-104-CR-B2",
+    "A-106-CR-B2", "A-107-CR-B2", "A-108-CR-B2", "A-109-CR-B2",
+    "A-110-CR-B2", "A-111-CR-B2", "A-113-CR-B2", "A-114-CR-B2", "A-115-CR-B2"
+  ],
+  "exit_buttons": [
+    "A-101-EB-B2", "A-103-EB-B2", "A-105-EB-B2", "A-109-EB-B2",
+    "A-111-EB-B2", "A-112-EB-B2", "A-115-EB-B2"
+  ],
+  "locks": {
+    "type": "electromagnetic",
+    "holding_force": "1200 lbs",
+    "quantity": 15
+  }
+}

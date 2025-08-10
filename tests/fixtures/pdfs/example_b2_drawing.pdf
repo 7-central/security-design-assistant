@@ -1,0 +1,118 @@
+%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 2000
+>>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(SECURITY DRAWING - BUILDING B2 - LEVEL 2) Tj
+0 -20 Td
+(Project: 7Central Security System Installation) Tj
+0 -20 Td
+(Drawing No: SEC-B2-L2-001) Tj
+0 -20 Td
+(Date: 2025-02-06) Tj
+0 -40 Td
+(DOOR SCHEDULE:) Tj
+0 -20 Td
+(A-101-DR-B2 - Main Entrance - Card Reader + Exit Button) Tj
+0 -15 Td
+(A-102-DR-B2 - Conference Room A - Card Reader) Tj
+0 -15 Td
+(A-103-DR-B2 - Office 201 - Card Reader + Exit Button) Tj
+0 -15 Td
+(A-104-DR-B2 - Office 202 - Card Reader) Tj
+0 -15 Td
+(A-105-DR-B2 - Emergency Exit North - Exit Button Only) Tj
+0 -15 Td
+(A-106-DR-B2 - Server Room - Card Reader + Biometric) Tj
+0 -15 Td
+(A-107-DR-B2 - Storage Room - Card Reader) Tj
+0 -15 Td
+(A-108-DR-B2 - Break Room - Card Reader) Tj
+0 -15 Td
+(A-109-DR-B2 - Office 203 - Card Reader + Exit Button) Tj
+0 -15 Td
+(A-110-DR-B2 - Office 204 - Card Reader) Tj
+0 -15 Td
+(A-111-DR-B2 - Conference Room B - Card Reader + Exit Button) Tj
+0 -15 Td
+(A-112-DR-B2 - Emergency Exit South - Exit Button Only) Tj
+0 -15 Td
+(A-113-DR-B2 - IT Room - Card Reader + Biometric) Tj
+0 -15 Td
+(A-114-DR-B2 - Office 205 - Card Reader) Tj
+0 -15 Td
+(A-115-DR-B2 - Office 206 - Card Reader + Exit Button) Tj
+0 -20 Td
+(CARD READERS:) Tj
+0 -15 Td
+(A-101-CR-B2, A-102-CR-B2, A-103-CR-B2, A-104-CR-B2) Tj
+0 -15 Td
+(A-106-CR-B2, A-107-CR-B2, A-108-CR-B2, A-109-CR-B2) Tj
+0 -15 Td
+(A-110-CR-B2, A-111-CR-B2, A-113-CR-B2, A-114-CR-B2, A-115-CR-B2) Tj
+0 -20 Td
+(EXIT BUTTONS:) Tj
+0 -15 Td
+(A-101-EB-B2, A-103-EB-B2, A-105-EB-B2, A-109-EB-B2) Tj
+0 -15 Td
+(A-111-EB-B2, A-112-EB-B2, A-115-EB-B2) Tj
+0 -20 Td
+(LOCKS:) Tj
+0 -15 Td
+(All doors equipped with electromagnetic locks) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000275 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+2330
+%%EOF

@@ -1,0 +1,266 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 6,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/API", "RequestCount", "Environment", "${Environment}", "Endpoint", "/process-drawing", "Method", "POST" ],
+          [ "SecurityAssistant/API", "RequestCount", "Environment", "${Environment}", "Endpoint", "/status", "Method", "GET" ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "API Request Counts (Last Hour)",
+        "period": 3600,
+        "stat": "Sum",
+        "sparkline": true
+      }
+    },
+    {
+      "type": "metric",
+      "x": 6,
+      "y": 0,
+      "width": 6,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ { "expression": "m1/(m1+m2)*100", "label": "Success Rate %" } ],
+          [ "SecurityAssistant/API", "SuccessfulRequests", "Environment", "${Environment}", { "id": "m1", "visible": false } ],
+          [ "SecurityAssistant/API", "ErrorRequests", "Environment", "${Environment}", { "id": "m2", "visible": false } ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "API Success Rate %",
+        "period": 3600,
+        "stat": "Sum"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 6,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/API", "ErrorRequests", "Environment", "${Environment}", "StatusCode", "4xx" ],
+          [ "SecurityAssistant/API", "ErrorRequests", "Environment", "${Environment}", "StatusCode", "5xx" ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "Error Counts by Type",
+        "period": 3600,
+        "stat": "Sum",
+        "sparkline": true
+      }
+    },
+    {
+      "type": "metric",
+      "x": 18,
+      "y": 0,
+      "width": 6,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/process-drawing" ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/status" ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "Avg Response Time (sec)",
+        "period": 3600,
+        "stat": "Average"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/process-drawing", { "stat": "p50" } ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/process-drawing", { "stat": "p90" } ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/process-drawing", { "stat": "p99" } ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/status", { "stat": "p50" } ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/status", { "stat": "p90" } ],
+          [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/status", { "stat": "p99" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Processing Time Metrics (p50, p90, p99)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", "security-assistant-processing-${Environment}" ],
+          [ "AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", "security-assistant-dlq-${Environment}" ],
+          [ "AWS/SQS", "ApproximateAgeOfOldestMessage", "QueueName", "security-assistant-processing-${Environment}" ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Queue Depth Visualization Over Time",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Queue Depth Warning",
+              "value": 10,
+              "fill": "above"
+            },
+            {
+              "label": "DLQ Alert",
+              "value": 5,
+              "fill": "above"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ { "expression": "SUM([m1,m2,m3,m4,m5])", "label": "Active Jobs" } ],
+          [ "SecurityAssistant/Pipeline", "StageCompletion", "Environment", "${Environment}", "Stage", "pdf_processing", "Status", "completed", { "id": "m1", "visible": false } ],
+          [ "SecurityAssistant/Pipeline", "StageCompletion", "Environment", "${Environment}", "Stage", "context_processing", "Status", "completed", { "id": "m2", "visible": false } ],
+          [ "SecurityAssistant/Pipeline", "StageCompletion", "Environment", "${Environment}", "Stage", "drawing_analysis", "Status", "completed", { "id": "m3", "visible": false } ],
+          [ "SecurityAssistant/Pipeline", "StageCompletion", "Environment", "${Environment}", "Stage", "excel_generation", "Status", "completed", { "id": "m4", "visible": false } ],
+          [ "SecurityAssistant/Pipeline", "StageCompletion", "Environment", "${Environment}", "Stage", "evaluation", "Status", "completed", { "id": "m5", "visible": false } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Active vs Completed Jobs",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/TokenUsage", "TotalTokens", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp", "Operation", "pdf_analysis" ],
+          [ "SecurityAssistant/TokenUsage", "TotalTokens", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp", "Operation", "excel_generation" ],
+          [ "SecurityAssistant/TokenUsage", "TotalTokens", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp", "Operation", "evaluation" ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Gemini API Token Usage Trends",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SecurityAssistant/TokenUsage", "EstimatedCost", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp" ],
+          [ { "expression": "RATE(m1)", "label": "Cost Rate ($/hour)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Token Cost and Budget Alerts",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Daily Budget Threshold",
+              "value": 10.0,
+              "fill": "above"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/security-assistant-worker-${Environment}'\n| fields @timestamp, job_id, stage_name, success, error_type\n| filter event_type = \"custom_metric\" and metric_type = \"stage_outcome\" and success = false\n| stats count() as failure_count by stage_name, error_type\n| sort failure_count desc\n| limit 10",
+        "region": "us-east-1",
+        "title": "Processing Stage Failure Analysis",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/security-assistant-api-${Environment}' | SOURCE '/aws/lambda/security-assistant-status-${Environment}'\n| fields @timestamp, event_type, status_code, execution_time_seconds, endpoint\n| filter event_type in [\"api_response_success\", \"status_response_success\"]\n| filter @timestamp > datefloor(@timestamp, 1h)\n| stats count() as request_count, avg(execution_time_seconds) as avg_response_time by status_code, endpoint\n| sort request_count desc",
+        "region": "us-east-1",
+        "title": "Real-time API Performance (Last Hour)",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 24,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/security-assistant-dlq-processor-${Environment}'\n| fields @timestamp, job_id, failure_type, error_summary, receive_count\n| filter event_type = \"error\" and @message like /DLQ/\n| sort @timestamp desc\n| limit 15",
+        "region": "us-east-1",
+        "title": "Recent DLQ Processing and Critical Failures",
+        "view": "table"
+      }
+    }
+  ]
+}

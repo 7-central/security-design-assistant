@@ -1,0 +1,672 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Security Design Assistant - Serverless Infrastructure'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+  
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Gemini API key for AI processing
+
+Globals:
+  Function:
+    Runtime: python3.11
+    MemorySize: 1024
+    Timeout: 900
+    Tracing: Active  # Enable X-Ray tracing for all functions
+    Environment:
+      Variables:
+        STORAGE_MODE: aws
+        S3_BUCKET: !Ref S3Bucket
+        DYNAMODB_TABLE: !Ref JobsTable
+        SQS_QUEUE_URL: !Ref ProcessingQueue
+        GEMINI_API_KEY: !Ref GeminiApiKey
+        ENVIRONMENT: !Ref Environment
+        SNS_ALERT_TOPIC_ARN: !Ref AlertTopic
+        _X_AMZN_TRACE_ID: !Sub "${AWS::StackName}"
+
+Resources:
+  # S3 Bucket for file storage
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'security-assistant-files-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 365
+
+  # DynamoDB table for job tracking
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'security-assistant-jobs-${Environment}'
+      AttributeDefinitions:
+        - AttributeName: 'company#client#job'
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+        - AttributeName: client_name
+          AttributeType: S
+        - AttributeName: date_bucket
+          AttributeType: S
+      KeySchema:
+        - AttributeName: 'company#client#job'
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        # GSI1: StatusDateIndex for querying jobs by status
+        - IndexName: StatusDateIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        # GSI2: ClientProjectIndex for querying jobs by client
+        - IndexName: ClientProjectIndex
+          KeySchema:
+            - AttributeName: client_name
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        # GSI3: DateRangeIndex for querying jobs by date range
+        - IndexName: DateRangeIndex
+          KeySchema:
+            - AttributeName: date_bucket
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 10
+        WriteCapacityUnits: 10
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # Main SQS queue for processing jobs
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'security-assistant-processing-${Environment}'
+      VisibilityTimeoutSeconds: 1800  # 30 minutes (max Lambda duration)
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # Dead Letter Queue for failed processing jobs
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'security-assistant-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # CloudWatch Alarm for DLQ depth
+  DLQDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-dlq-depth-${Environment}'
+      AlarmDescription: 'Monitor DLQ depth for failed processing jobs'
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Lambda Error Rate Alarms (>10% threshold)
+  ApiLambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-api-error-rate-${Environment}'
+      AlarmDescription: 'API Lambda error rate exceeds 10%'
+      MetricName: ErrorRate
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDrawingApiFunction
+      AlarmActions:
+        - !Ref AlertTopic
+
+  WorkerLambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-worker-error-rate-${Environment}'
+      AlarmDescription: 'Worker Lambda error rate exceeds 10%'
+      MetricName: ErrorRate
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDrawingWorkerFunction
+      AlarmActions:
+        - !Ref AlertTopic
+
+  StatusLambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-status-error-rate-${Environment}'
+      AlarmDescription: 'Status Lambda error rate exceeds 10%'
+      MetricName: ErrorRate
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GetJobStatusFunction
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # SQS Message Age Alarms (>20 minutes)
+  ProcessingQueueMessageAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-queue-message-age-${Environment}'
+      AlarmDescription: 'Processing queue message age exceeds 20 minutes'
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1200  # 20 minutes in seconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ProcessingQueue.QueueName
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Monthly Cost Projection Alarm
+  TokenCostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-token-cost-${Environment}'
+      AlarmDescription: 'Monthly token cost projection exceeds budget'
+      MetricName: EstimatedCost
+      Namespace: SecurityAssistant/TokenUsage
+      Statistic: Sum
+      Period: 86400  # Daily
+      EvaluationPeriods: 7  # Check for 7 days
+      Threshold: 100.0  # $100 per week threshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # API Gateway 5XX Error Rate Alarm
+  ApiGateway5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-api-5xx-errors-${Environment}'
+      AlarmDescription: 'API Gateway 5XX error rate is high'
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'security-assistant-${Environment}'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # DynamoDB Throttling Alarm
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-dynamodb-throttles-${Environment}'
+      AlarmDescription: 'DynamoDB throttling detected'
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref JobsTable
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Composite Alarm for Cascading Failures
+  SystemHealthCompositeAlarm:
+    Type: AWS::CloudWatch::CompositeAlarm
+    Properties:
+      AlarmName: !Sub 'security-assistant-system-health-${Environment}'
+      AlarmDescription: 'Composite alarm for detecting cascading system failures'
+      AlarmRule: !Sub |
+        (ALARM(${ApiLambdaErrorRateAlarm}) AND ALARM(${WorkerLambdaErrorRateAlarm})) OR 
+        (ALARM(${DLQDepthAlarm}) AND ALARM(${ProcessingQueueMessageAgeAlarm})) OR
+        ALARM(${ApiGateway5XXErrorAlarm})
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # SNS topic for critical alerts
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'security-assistant-alerts-${Environment}'
+      DisplayName: 'Security Assistant Critical Alerts'
+
+  # API Gateway for REST API
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda function for processing drawing uploads (API endpoint)
+  ProcessDrawingApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-api-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.process_drawing_api.handler
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref S3Bucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ProcessingQueue.QueueName
+      Events:
+        ProcessDrawing:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /process-drawing
+            Method: post
+
+  # Lambda function for processing jobs from SQS
+  ProcessDrawingWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-worker-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.process_drawing_worker.handler
+      MemorySize: 3008  # 3GB for PDF processing
+      Timeout: 900     # 15 minutes
+      ReservedConcurrentExecutions: 10  # Limit concurrent processing
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref S3Bucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ProcessingQueue.QueueName
+      Events:
+        SQSProcessor:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProcessingQueue.Arn
+            BatchSize: 1
+            MaximumBatchingWindowInSeconds: 0
+
+  # Lambda function for job status endpoint
+  GetJobStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-status-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.get_job_status.handler
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobsTable
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /status/{job_id}
+            Method: get
+
+  # Lambda function for processing DLQ messages
+  DLQProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-dlq-processor-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.dlq_processor.handler
+      MemorySize: 512
+      Timeout: 300  # 5 minutes
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+          SNS_ALERT_TOPIC_ARN: !Ref AlertTopic
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AlertTopic.TopicName
+        - SQSPollerPolicy:
+            QueueName: !GetAtt DeadLetterQueue.QueueName
+      Events:
+        DLQProcessor:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DeadLetterQueue.Arn
+            BatchSize: 5
+            MaximumBatchingWindowInSeconds: 60
+
+  # CloudWatch Log Groups with retention
+  ProcessDrawingApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/security-assistant-api-${Environment}'
+      RetentionInDays: 30
+
+  ProcessDrawingWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/security-assistant-worker-${Environment}'
+      RetentionInDays: 30
+
+  GetJobStatusLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/security-assistant-status-${Environment}'
+      RetentionInDays: 30
+
+  DLQProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/security-assistant-dlq-processor-${Environment}'
+      RetentionInDays: 30
+
+  # CloudWatch Dashboards
+  MainDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'SecurityAssistant-Main-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${ProcessDrawingApiFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${ProcessDrawingWorkerFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${GetJobStatusFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${DLQProcessorFunction}", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "Lambda Invocations",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${ProcessDrawingApiFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${ProcessDrawingWorkerFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${GetJobStatusFunction}", { "stat": "Sum" } ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${DLQProcessorFunction}", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "Lambda Errors",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", "${ProcessingQueue}", { "stat": "Average" } ],
+                  [ "AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", "${DeadLetterQueue}", { "stat": "Average" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "SQS Queue Depth",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "SecurityAssistant/Pipeline", "ProcessingDuration", "Environment", "${Environment}", "Stage", "pdf_processing", { "stat": "Average" } ],
+                  [ "SecurityAssistant/Pipeline", "ProcessingDuration", "Environment", "${Environment}", "Stage", "context_processing", { "stat": "Average" } ],
+                  [ "SecurityAssistant/Pipeline", "ProcessingDuration", "Environment", "${Environment}", "Stage", "drawing_analysis", { "stat": "Average" } ],
+                  [ "SecurityAssistant/Pipeline", "ProcessingDuration", "Environment", "${Environment}", "Stage", "excel_generation", { "stat": "Average" } ],
+                  [ "SecurityAssistant/Pipeline", "ProcessingDuration", "Environment", "${Environment}", "Stage", "evaluation", { "stat": "Average" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "Processing Duration by Stage",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  HealthMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'SecurityAssistant-Health-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "SecurityAssistant/API", "RequestCount", "Environment", "${Environment}", "Endpoint", "/process-drawing" ],
+                  [ "SecurityAssistant/API", "RequestCount", "Environment", "${Environment}", "Endpoint", "/status" ]
+                ],
+                "view": "singleValue",
+                "region": "us-east-1",
+                "title": "API Request Counts",
+                "period": 3600,
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/process-drawing", { "stat": "Average" } ],
+                  [ "SecurityAssistant/API", "ResponseTime", "Environment", "${Environment}", "Endpoint", "/status", { "stat": "Average" } ]
+                ],
+                "view": "singleValue",
+                "region": "us-east-1",
+                "title": "Avg Response Time",
+                "period": 3600,
+                "stat": "Average"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "SecurityAssistant/TokenUsage", "TotalTokens", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp", { "stat": "Sum" } ],
+                  [ "SecurityAssistant/TokenUsage", "EstimatedCost", "Environment", "${Environment}", "Model", "gemini-2.0-flash-exp", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "Token Usage & Cost Trends",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  S3Bucket:
+    Description: 'S3 bucket for file storage'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket'
+
+  DynamoDBTable:
+    Description: 'DynamoDB table for job tracking'
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTable'
+
+  SQSQueue:
+    Description: 'SQS queue for job processing'
+    Value: !Ref ProcessingQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-SQSQueue'
+
+  DeadLetterQueue:
+    Description: 'Dead Letter Queue for failed jobs'
+    Value: !Ref DeadLetterQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-DeadLetterQueue'

@@ -1,0 +1,165 @@
+{
+  "description": "CloudWatch Logs Insights queries for Security Design Assistant troubleshooting",
+  "version": "1.0",
+  "queries": {
+    "error_analysis": {
+      "name": "Error Analysis by Function",
+      "description": "Find all errors across Lambda functions with context",
+      "query": "fields @timestamp, @message, function_name, correlation_id, job_id, error.type, error.message\n| filter event_type = \"error\" or @message like /ERROR/\n| sort @timestamp desc\n| limit 100",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}",
+        "/aws/lambda/security-assistant-dlq-processor-{environment}"
+      ]
+    },
+    "job_processing_timeline": {
+      "name": "Job Processing Timeline",
+      "description": "Track complete job processing lifecycle by job_id",
+      "query": "fields @timestamp, event_type, stage, status, job_id, correlation_id, execution_time_seconds\n| filter job_id = \"{JOB_ID}\"\n| sort @timestamp asc\n| limit 50",
+      "parameters": ["JOB_ID"],
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}"
+      ]
+    },
+    "performance_analysis": {
+      "name": "Performance Analysis - Slow Jobs",
+      "description": "Find jobs with long processing times or timeouts",
+      "query": "fields @timestamp, job_id, event_type, execution_time_seconds, stage, total_processing_time_seconds\n| filter event_type in [\"lambda_metrics\", \"stage_complete\", \"timeout_detected\"]\n| filter execution_time_seconds > 60 or total_processing_time_seconds > 300\n| sort @timestamp desc\n| limit 20",
+      "log_groups": [
+        "/aws/lambda/security-assistant-worker-{environment}"
+      ]
+    },
+    "api_request_analysis": {
+      "name": "API Request Analysis",
+      "description": "Analyze API Gateway requests and response patterns",
+      "query": "fields @timestamp, event_type, http_method, status_code, job_id, correlation_id, execution_time_seconds, source_ip\n| filter event_type in [\"api_request\", \"api_response_success\", \"status_request\"]\n| stats count() by status_code, http_method\n| sort @timestamp desc\n| limit 100",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}"
+      ]
+    },
+    "token_usage_analysis": {
+      "name": "Token Usage and Cost Analysis",
+      "description": "Track Gemini API token consumption and estimated costs",
+      "query": "fields @timestamp, job_id, model_name, operation, total_tokens, estimated_cost_usd\n| filter event_type = \"custom_metric\" and metric_type = \"token_usage\"\n| stats sum(total_tokens) as total_tokens_used, sum(estimated_cost_usd) as total_cost_usd by model_name, operation\n| sort total_cost_usd desc\n| limit 20",
+      "log_groups": [
+        "/aws/lambda/security-assistant-worker-{environment}"
+      ]
+    },
+    "stage_failure_analysis": {
+      "name": "Processing Stage Failures",
+      "description": "Identify which processing stages fail most frequently",
+      "query": "fields @timestamp, job_id, stage_name, error_type, retry_count\n| filter event_type = \"custom_metric\" and metric_type = \"stage_outcome\" and success = false\n| stats count() as failure_count by stage_name, error_type\n| sort failure_count desc\n| limit 10",
+      "log_groups": [
+        "/aws/lambda/security-assistant-worker-{environment}"
+      ]
+    },
+    "correlation_trace": {
+      "name": "Correlation ID Trace",
+      "description": "Follow complete request flow using correlation ID",
+      "query": "fields @timestamp, @message, event_type, function_name, job_id, stage\n| filter correlation_id = \"{CORRELATION_ID}\"\n| sort @timestamp asc\n| limit 50",
+      "parameters": ["CORRELATION_ID"],
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}",
+        "/aws/lambda/security-assistant-dlq-processor-{environment}"
+      ]
+    },
+    "dlq_failure_patterns": {
+      "name": "DLQ Failure Pattern Analysis",
+      "description": "Analyze patterns in Dead Letter Queue failures",
+      "query": "fields @timestamp, job_id, failure_type, error_summary, receive_count, processing_duration_seconds\n| filter event_type = \"error\" and @message like /DLQ/\n| stats count() as failure_count, avg(processing_duration_seconds) as avg_duration by failure_type\n| sort failure_count desc\n| limit 10",
+      "log_groups": [
+        "/aws/lambda/security-assistant-dlq-processor-{environment}"
+      ]
+    },
+    "memory_and_timeout_issues": {
+      "name": "Memory and Timeout Issues",
+      "description": "Identify Lambda functions with memory or timeout problems",
+      "query": "fields @timestamp, function_name, job_id, @message\n| filter @message like /memory/ or @message like /timeout/ or @message like /Task timed out/\n| sort @timestamp desc\n| limit 20",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}",
+        "/aws/lambda/security-assistant-dlq-processor-{environment}"
+      ]
+    },
+    "client_project_analysis": {
+      "name": "Client and Project Analysis",
+      "description": "Analyze job patterns by client and project",
+      "query": "fields @timestamp, client_name, project_name, job_id, status, file_size_mb\n| filter event_type = \"job_created\"\n| stats count() as job_count, avg(file_size_mb) as avg_file_size by client_name, project_name\n| sort job_count desc\n| limit 20",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}"
+      ]
+    },
+    "sqs_processing_analysis": {
+      "name": "SQS Message Processing Analysis",
+      "description": "Track SQS message processing patterns and delays",
+      "query": "fields @timestamp, event_type, job_id, sqs_message_id, queue_url\n| filter event_type in [\"sqs_message_sent\", \"sqs_message_received\"]\n| sort @timestamp desc\n| limit 50",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}"
+      ]
+    },
+    "lambda_cold_start_analysis": {
+      "name": "Lambda Cold Start Analysis",
+      "description": "Identify cold start impacts on performance",
+      "query": "fields @timestamp, function_name, @duration, @billedDuration, @maxMemoryUsed\n| filter @type = \"REPORT\"\n| stats count() as invocation_count, avg(@duration) as avg_duration, max(@maxMemoryUsed) as max_memory by function_name\n| sort avg_duration desc",
+      "log_groups": [
+        "/aws/lambda/security-assistant-api-{environment}",
+        "/aws/lambda/security-assistant-worker-{environment}",
+        "/aws/lambda/security-assistant-status-{environment}",
+        "/aws/lambda/security-assistant-dlq-processor-{environment}"
+      ]
+    },
+    "rate_limit_analysis": {
+      "name": "Rate Limiting Analysis",
+      "description": "Track Gemini API rate limiting and backoff patterns",
+      "query": "fields @timestamp, job_id, @message, error.type\n| filter @message like /rate.limit/ or error.type = \"RateLimitExceededException\"\n| sort @timestamp desc\n| limit 20",
+      "log_groups": [
+        "/aws/lambda/security-assistant-worker-{environment}"
+      ]
+    }
+  },
+  "dashboard_queries": {
+    "real_time_monitoring": {
+      "name": "Real-time System Health",
+      "description": "Query for real-time dashboard widgets",
+      "queries": {
+        "error_rate_last_hour": {
+          "query": "fields @timestamp\n| filter event_type = \"error\"\n| filter @timestamp > datefloor(@timestamp, 1h)\n| stats count() as error_count by bin(5m)",
+          "refresh_interval": "1m"
+        },
+        "jobs_by_status": {
+          "query": "fields @timestamp, status, job_id\n| filter event_type in [\"job_created\", \"api_response_success\"]\n| filter @timestamp > datefloor(@timestamp, 1h)\n| stats count() by status",
+          "refresh_interval": "1m"
+        },
+        "average_processing_time": {
+          "query": "fields @timestamp, total_processing_time_seconds\n| filter event_type = \"stage_complete\" and stage = \"completed\"\n| filter @timestamp > datefloor(@timestamp, 1h)\n| stats avg(total_processing_time_seconds) as avg_processing_time by bin(5m)",
+          "refresh_interval": "1m"
+        }
+      }
+    }
+  },
+  "saved_queries_instructions": {
+    "description": "Instructions for using these queries in CloudWatch Logs Insights",
+    "steps": [
+      "1. Navigate to CloudWatch > Logs > Insights in AWS Console",
+      "2. Select the appropriate log group(s) from the list above",
+      "3. Copy and paste the query, replacing {environment} with your actual environment (dev/staging/prod)",
+      "4. For parameterized queries, replace {PARAMETER_NAME} with actual values",
+      "5. Adjust time range as needed (default: last 1 hour)",
+      "6. Click 'Run query' to execute"
+    ],
+    "tips": [
+      "Save frequently used queries using 'Save query' button",
+      "Use 'Export results' to download data for further analysis",
+      "Combine multiple queries for comprehensive troubleshooting",
+      "Set up CloudWatch alarms based on query results for proactive monitoring"
+    ]
+  }
+}

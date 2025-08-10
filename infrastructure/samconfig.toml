@@ -1,0 +1,39 @@
+# SAM configuration for deployment
+
+[default.deploy.parameters]
+stack_name = "security-assistant-dev"
+s3_bucket = "security-assistant-sam-deployments"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+]
+
+[default.build.parameters]
+cached = true
+parallel = true
+use_container = false
+
+[staging.deploy.parameters]
+stack_name = "security-assistant-staging"
+s3_bucket = "security-assistant-sam-deployments"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=staging",
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+]
+
+[prod.deploy.parameters]
+stack_name = "security-assistant-prod"
+s3_bucket = "security-assistant-sam-deployments"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=prod",
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+]
