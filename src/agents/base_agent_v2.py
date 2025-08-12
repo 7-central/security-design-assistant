@@ -45,7 +45,6 @@ class BaseAgentV2(ABC):
         """
         # Import only when needed to reduce cold start time
         from google import genai
-        from google.genai import types
 
         if not settings.GEMINI_API_KEY:
             raise ValueError(
@@ -157,6 +156,9 @@ class BaseAgentV2(ABC):
             "top_p": 0.95,
             "max_output_tokens": 8192,
         }
+
+        # Import types locally to avoid scope issues
+        from google.genai import types
 
         response = self.client.models.generate_content(
             model=model_name,
