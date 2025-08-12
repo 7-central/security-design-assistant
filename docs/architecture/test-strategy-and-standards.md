@@ -2,9 +2,19 @@
 
 ## Testing Philosophy
 
-- **Approach:** Test-After Development with comprehensive coverage
-- **Coverage Goals:** 80% unit test coverage, 100% critical path coverage
-- **Test Pyramid:** 70% unit tests, 25% integration tests, 5% evaluation tests
+**Pragmatic real-world validation over comprehensive mocking**
+
+Our testing approach prioritizes practical validation with real services over complex mocking infrastructure. This ensures we catch actual issues that affect production while maintaining a manageable test suite.
+
+### Core Principles
+- Unit tests provide foundation for business logic validation
+- E2E tests validate actual system behavior with real APIs
+- No complex mocking infrastructure to maintain
+- Focus on critical paths, not coverage metrics
+
+### Test Distribution
+- **90% Unit Tests**: Fast, isolated tests for business logic
+- **10% E2E Tests**: Real API validation for critical paths
 
 ## Test Types and Organization
 
@@ -23,21 +33,25 @@
 - Mock all external dependencies
 - Mock Gemini API responses using unittest.mock
 
-### Integration Tests
+### E2E Tests (Replacing Integration Tests)
 
-- **Scope:** End-to-end pipeline testing, multi-agent workflows
-- **Location:** `tests/integration/`
-- **Test Infrastructure:**
-  - **Gemini API:** Mock responses using unittest.mock
-  - **AWS Services:** Moto library for S3/DynamoDB mocking
-  - **PDF Processing:** Test fixtures with known outputs
+- **Scope:** Real end-to-end pipeline validation
+- **Location:** `tests/e2e/`
+- **Test Infrastructure (Updated per Story 4.3.1):**
+  - **Gemini API:** Real API calls (test account)
+  - **AWS Services:** Dev resources for local testing
+    - S3: `security-assistant-dev-445567098699`
+    - DynamoDB: `security-assistant-dev-jobs`
+  - **Local Execution:** FastAPI server with dev AWS resources
+  - **PDF Processing:** Test fixtures with actual API processing
+  - **Execution:** `pytest -m e2e` locally or automated in CI/CD
 
-### End-to-End Tests
+### Simplified Test Execution
 
-- **Framework:** pytest with real AWS services (staging environment)
-- **Scope:** Full drawing processing with actual AI calls
-- **Environment:** Staging AWS deployment
-- **Test Data:** Curated set of 10 drawing variations in `tests/fixtures/drawings/`
+- **Framework:** pytest with minimal configuration
+- **Unit Tests:** Fast, mocked dependencies, run frequently
+- **E2E Tests:** Real APIs, run on-demand or in CI/CD
+- **Test Data:** Reuse drawing variations from Story 4.2 in `tests/fixtures/drawings/`
 
 ## Test Data Management
 
@@ -48,9 +62,14 @@
 
 ## Continuous Testing
 
-- **CI Integration:** 
-  - Unit/Integration tests on every commit
-  - Evaluation tests weekly or after prompt changes
+- **CI Integration (Updated per Story 4.3.1):** 
+  - Unit tests on every commit (<10 seconds)
+  - E2E tests on PR to develop branch (using dev AWS resources)
+  - Full deployment tests on merge to main
+- **GitHub Actions Workflows:**
+  - `.github/workflows/ci.yml` - Feature branch testing
+  - `.github/workflows/deploy-dev.yml` - Dev deployment
+  - `.github/workflows/deploy-prod.yml` - Production deployment
 - **Performance Tests:** Manual benchmark suite (future phase)
 - **Security Tests:** Dependency scanning via GitHub Dependabot
 
@@ -133,10 +152,7 @@ def test_schedule_agent_extracts_door_components(mock_client):
 6. **Spatial relationship errors** - Detect wrong door-reader associations
 7. **Improvement suggestions** - Provide actionable feedback
 
-### Integration Test Scenarios
-1. **Happy path full pipeline** - Drawing → Context → Extract → Excel → Judge
-2. **No context pipeline** - Skip context agent when not provided
-3. **Pipeline recovery** - Resume from checkpoint after simulated failure
-4. **Concurrent job processing** - Multiple jobs don't interfere
-5. **Large drawing timeout** - Checkpoint and resume after Lambda timeout
-6. **Invalid input rejection** - Non-PDF files fail fast with clear errors
+### E2E Test Scenarios (Simplified)
+1. **Happy path full pipeline** - Drawing → Context → Extract → Excel with real APIs
+2. **Error handling** - Invalid PDF rejection with proper error messages
+3. **Consistency validation** - Same drawing 3 times, verify <5% variance

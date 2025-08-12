@@ -1,0 +1,18 @@
+# Code Owners for Security Design Assistant
+# These users will be automatically requested for review on pull requests
+
+# Global owners for all files
+* @junksamiad
+
+# Documentation owners
+/docs/ @junksamiad
+
+# Infrastructure and deployment
+/infrastructure/ @junksamiad
+/.github/ @junksamiad
+
+# Source code
+/src/ @junksamiad
+
+# Tests
+/tests/ @junksamiad

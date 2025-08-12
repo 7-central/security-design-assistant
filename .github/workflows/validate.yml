@@ -1,0 +1,138 @@
+name: Validate Pull Request
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  SAM_VERSION: '1.100'
+  
+jobs:
+  validate:
+    name: Validate Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Set up SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        version: ${{ env.SAM_VERSION }}
+        
+    - name: Install CFN Lint
+      run: |
+        pip install cfn-lint
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov ruff mypy
+        
+    - name: Run ruff linting
+      run: |
+        python -m ruff check src/ tests/
+        python -m ruff format --check src/ tests/
+        
+    - name: Run type checking
+      run: |
+        python -m mypy src/
+        
+    - name: Validate SAM template
+      run: |
+        sam validate --template-file infrastructure/template.yaml
+        
+    - name: Run CFN Lint on SAM template
+      run: |
+        cfn-lint infrastructure/template.yaml
+        
+    - name: Run unit tests with coverage
+      run: |
+        python -m pytest tests/unit/ -v --cov=src --cov-report=term-missing --cov-fail-under=80
+        
+    - name: Run integration tests
+      run: |
+        python -m pytest tests/integration/ -v
+      env:
+        STORAGE_MODE: local
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        
+    - name: Security scan with bandit
+      run: |
+        pip install bandit
+        bandit -r src/ -f json -o bandit-report.json || true
+        
+    - name: Check for security issues
+      run: |
+        if [ -f bandit-report.json ]; then
+          # Check if there are any HIGH or MEDIUM severity issues
+          HIGH_ISSUES=$(cat bandit-report.json | python -c "import sys,json; data=json.load(sys.stdin); print(len([r for r in data.get('results',[]) if r.get('issue_severity') == 'HIGH']))")
+          MEDIUM_ISSUES=$(cat bandit-report.json | python -c "import sys,json; data=json.load(sys.stdin); print(len([r for r in data.get('results',[]) if r.get('issue_severity') == 'MEDIUM']))")
+          
+          if [ "$HIGH_ISSUES" -gt 0 ]; then
+            echo "❌ Found $HIGH_ISSUES HIGH severity security issues"
+            exit 1
+          elif [ "$MEDIUM_ISSUES" -gt 5 ]; then
+            echo "❌ Found $MEDIUM_ISSUES MEDIUM severity security issues (threshold: 5)"
+            exit 1
+          else
+            echo "✅ Security scan passed"
+          fi
+        fi
+        
+    - name: Build SAM application
+      run: |
+        sam build --template-file infrastructure/template.yaml
+        
+    - name: Generate test coverage report
+      if: always()
+      run: |
+        python -m pytest tests/unit/ --cov=src --cov-report=html --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      if: always()
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          let comment = '## 🔍 Validation Results\n\n';
+          
+          // Add validation status
+          comment += '✅ **SAM Template Validation**: Passed\n';
+          comment += '✅ **CFN Lint**: Passed\n';
+          comment += '✅ **Code Linting**: Passed\n';
+          comment += '✅ **Type Checking**: Passed\n';
+          comment += '✅ **Unit Tests**: Passed\n';
+          comment += '✅ **Integration Tests**: Passed\n';
+          comment += '✅ **Security Scan**: Passed\n';
+          comment += '✅ **Build**: Passed\n\n';
+          
+          comment += 'All validation checks have passed! ✨\n\n';
+          comment += '---\n*This comment was generated automatically by the validation workflow.*';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

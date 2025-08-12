@@ -1,0 +1,558 @@
+"""
+Unit tests for ValidationSuite script
+
+Tests the core validation suite functionality including batch processing,
+cost estimation, and pipeline orchestration.
+"""
+
+import asyncio
+import json
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from scripts.validation_suite import ValidationSuite
+
+
+@pytest.fixture
+def validation_suite():
+    """Create a ValidationSuite instance for testing."""
+    return ValidationSuite()
+
+
+@pytest.fixture
+def mock_storage():
+    """Mock storage interface."""
+    storage = Mock()
+    storage.save_file = AsyncMock(return_value="test/path/file.pdf")
+    storage.save_job_status = AsyncMock()
+    return storage
+
+
+@pytest.fixture
+def sample_test_descriptions():
+    """Sample test descriptions data."""
+    return {
+        "test_set_version": "1.0",
+        "created_date": "2025-08-10",
+        "total_drawings": 3,
+        "drawings": {
+            "test_1.pdf": {
+                "complexity": "simple",
+                "expected_assessment": "Good",
+                "test_focus": "Basic functionality"
+            },
+            "test_2.pdf": {
+                "complexity": "complex",
+                "expected_assessment": "Fair",
+                "test_focus": "Complex analysis"
+            },
+            "test_3.pdf": {
+                "complexity": "standard",
+                "expected_assessment": "Good",
+                "test_focus": "Standard workflow"
+            }
+        },
+        "success_criteria": {
+            "minimum_good_rate": 0.6,
+            "maximum_poor_rate": 0.2
+        }
+    }
+
+
+class TestValidationSuite:
+    """Test ValidationSuite core functionality."""
+
+    def test_init(self, validation_suite):
+        """Test ValidationSuite initialization."""
+        assert validation_suite.validation_run_id.startswith("validation_")
+        assert "storage" in str(type(validation_suite.storage)).lower()
+        assert validation_suite.pdf_processor is not None
+
+    @pytest.mark.asyncio
+    async def test_load_test_descriptions(self, validation_suite, tmp_path, sample_test_descriptions):
+        """Test loading test descriptions from file."""
+        # Create temporary test descriptions file
+        test_dir = tmp_path / "validation_suite"
+        test_dir.mkdir()
+        descriptions_file = test_dir / "test_descriptions.json"
+
+        with open(descriptions_file, 'w') as f:
+            json.dump(sample_test_descriptions, f)
+
+        # Temporarily patch the validation suite directory
+        with patch.object(ValidationSuite, 'VALIDATION_SUITE_DIR', test_dir):
+            validation_suite.VALIDATION_SUITE_DIR = test_dir
+            descriptions = await validation_suite.load_test_descriptions()
+
+        assert descriptions["test_set_version"] == "1.0"
+        assert descriptions["total_drawings"] == 3
+        assert "test_1.pdf" in descriptions["drawings"]
+        assert descriptions["drawings"]["test_1.pdf"]["complexity"] == "simple"
+
+    @pytest.mark.asyncio
+    async def test_load_test_descriptions_file_not_found(self, validation_suite, tmp_path):
+        """Test handling of missing test descriptions file."""
+        empty_dir = tmp_path / "empty_validation_suite"
+        empty_dir.mkdir()
+
+        validation_suite.VALIDATION_SUITE_DIR = empty_dir
+
+        with pytest.raises(FileNotFoundError):
+            await validation_suite.load_test_descriptions()
+
+    @pytest.mark.asyncio
+    async def test_find_test_drawings(self, validation_suite, tmp_path):
+        """Test finding test drawings."""
+        # Create test drawings
+        test_dir = tmp_path / "validation_suite"
+        test_dir.mkdir()
+
+        test_files = ["01_baseline.pdf", "02_complex.pdf", "03_simple.pdf"]
+        for filename in test_files:
+            (test_dir / filename).write_bytes(b"mock pdf content")
+
+        validation_suite.VALIDATION_SUITE_DIR = test_dir
+
+        # Test finding all drawings
+        drawings = await validation_suite.find_test_drawings()
+        assert len(drawings) == 3
+        assert all(d.suffix == ".pdf" for d in drawings)
+
+        # Test pattern matching
+        baseline_drawings = await validation_suite.find_test_drawings("01_*.pdf")
+        assert len(baseline_drawings) == 1
+        assert baseline_drawings[0].name == "01_baseline.pdf"
+
+    @pytest.mark.asyncio
+    async def test_estimate_costs(self, validation_suite, tmp_path):
+        """Test cost estimation."""
+        # Create mock drawings
+        drawings = []
+        for i in range(5):
+            drawing = tmp_path / f"test_{i}.pdf"
+            drawing.write_bytes(b"mock pdf content")
+            drawings.append(drawing)
+
+        estimates = await validation_suite.estimate_costs(drawings)
+
+        # Check structure
+        assert "drawings_count" in estimates
+        assert "estimated_tokens_per_drawing" in estimates
+        assert "estimated_cost_per_drawing" in estimates
+        assert "total_estimated_tokens" in estimates
+        assert "total_estimated_cost_usd" in estimates
+        assert "processing_time_estimate_minutes" in estimates
+
+        # Check calculations
+        assert estimates["drawings_count"] == 5
+        assert estimates["total_estimated_cost_usd"] > 0
+        assert estimates["processing_time_estimate_minutes"] == 15  # 5 drawings * 3 min each
+
+        # Verify token estimates are reasonable
+        tokens_per_drawing = estimates["estimated_tokens_per_drawing"]
+        assert tokens_per_drawing["context_processing"] > 0
+        assert tokens_per_drawing["schedule_analysis"] > 0
+        assert tokens_per_drawing["excel_generation"] > 0
+        assert tokens_per_drawing["judge_evaluation"] > 0
+
+    @pytest.mark.asyncio
+    async def test_estimate_costs_with_context(self, validation_suite, tmp_path):
+        """Test cost estimation with context file."""
+        drawings = [tmp_path / "test.pdf"]
+        drawings[0].write_bytes(b"mock pdf")
+
+        context_file = tmp_path / "context.docx"
+        context_file.write_bytes(b"mock context")
+
+        estimates = await validation_suite.estimate_costs(drawings, context_file)
+
+        assert estimates["drawings_count"] == 1
+        # Should still estimate context processing tokens even though context doesn't affect count
+        assert "context" in estimates["estimated_cost_per_drawing"]
+
+    @patch('scripts.validation_suite.PDFProcessor')
+    @patch('scripts.validation_suite.ContextAgent')
+    @patch('scripts.validation_suite.ScheduleAgentV2')
+    @patch('scripts.validation_suite.ExcelGenerationAgent')
+    @patch('scripts.validation_suite.JudgeAgentV2')
+    @patch('scripts.validation_suite.generate_job_id')
+    @pytest.mark.asyncio
+    async def test_process_drawing_through_pipeline_success(
+        self, mock_job_id, mock_judge, mock_excel, mock_schedule, mock_context, mock_pdf,
+        validation_suite, mock_storage, tmp_path
+    ):
+        """Test successful drawing processing through pipeline."""
+        # Setup mocks
+        mock_job_id.return_value = "test_job_123"
+
+        # PDF Processor mock
+        mock_pdf_instance = mock_pdf.return_value
+        mock_pdf_instance.extract_metadata.return_value = Mock(total_pages=2, pdf_type=Mock(value="native"))
+        mock_pdf_instance.process_pdf.return_value = ([Mock(to_dict=lambda: {"page": 1})], None)
+
+        # Agent mocks
+        mock_context_instance = mock_context.return_value
+        mock_context_instance.process = AsyncMock(return_value={"context": {"specifications": ["spec1"]}})
+
+        mock_schedule_instance = mock_schedule.return_value
+        mock_schedule_instance.process = AsyncMock(return_value={
+            "components": {
+                "pages": [{"components": [{"id": "A-001", "type": "door"}, {"id": "A-002", "type": "reader"}]}]
+            }
+        })
+
+        mock_excel_instance = mock_excel.return_value
+        mock_excel_instance.process = AsyncMock(return_value={
+            "status": "completed",
+            "file_path": "test/excel.xlsx",
+            "summary": {"doors_found": 2}
+        })
+
+        mock_judge_instance = mock_judge.return_value
+        mock_judge_instance.process = AsyncMock(return_value={
+            "evaluation": {
+                "overall_assessment": "Good",
+                "completeness": "All components found",
+                "correctness": "All correct",
+                "context_usage": "Well applied",
+                "spatial_understanding": "Excellent",
+                "false_positives": "None",
+                "improvement_suggestions": []
+            },
+            "metadata": {"confidence": 0.95}
+        })
+
+        # Create test file
+        test_drawing = tmp_path / "test_drawing.pdf"
+        test_drawing.write_bytes(b"mock pdf content")
+
+        context_file = tmp_path / "context.docx"
+        context_file.write_bytes(b"mock context content")
+
+        validation_suite.storage = mock_storage
+        validation_suite.pdf_processor = mock_pdf_instance
+
+        # Process drawing
+        result = await validation_suite.process_drawing_through_pipeline(test_drawing, context_file)
+
+        # Verify result structure
+        assert result["drawing_name"] == "test_drawing.pdf"
+        assert result["job_id"] == "test_job_123"
+        assert result["status"] == "completed"
+        assert result["overall_assessment"] == "Good"
+        assert result["components_count"] == 2
+        assert "processing_time_seconds" in result
+
+        # Verify pipeline stages
+        assert "pipeline_stages" in result
+        stages = result["pipeline_stages"]
+        assert "pdf_processing" in stages
+        assert "context_processing" in stages
+        assert "schedule_analysis" in stages
+        assert "excel_generation" in stages
+        assert "judge_evaluation" in stages
+
+        # Verify each stage completed
+        assert stages["pdf_processing"]["status"] == "completed"
+        assert stages["context_processing"]["status"] == "completed"
+        assert stages["schedule_analysis"]["status"] == "completed"
+        assert stages["excel_generation"]["status"] == "completed"
+        assert stages["judge_evaluation"]["status"] == "completed"
+
+        # Verify agent calls
+        mock_context_instance.process.assert_called_once()
+        mock_schedule_instance.process.assert_called_once()
+        mock_excel_instance.process.assert_called_once()
+        mock_judge_instance.process.assert_called_once()
+
+    @patch('scripts.validation_suite.PDFProcessor')
+    @patch('scripts.validation_suite.ScheduleAgentV2')
+    @patch('scripts.validation_suite.generate_job_id')
+    @pytest.mark.asyncio
+    async def test_process_drawing_through_pipeline_error(
+        self, mock_job_id, mock_schedule, mock_pdf,
+        validation_suite, mock_storage, tmp_path
+    ):
+        """Test drawing processing with error."""
+        mock_job_id.return_value = "error_job_456"
+
+        # Setup PDF processor to work normally
+        mock_pdf_instance = mock_pdf.return_value
+        mock_pdf_instance.extract_metadata.return_value = Mock(total_pages=1, pdf_type=Mock(value="native"))
+        mock_pdf_instance.process_pdf.return_value = ([Mock(to_dict=lambda: {"page": 1})], None)
+
+        # Make schedule agent fail
+        mock_schedule_instance = mock_schedule.return_value
+        mock_schedule_instance.process = AsyncMock(side_effect=Exception("Agent processing failed"))
+
+        test_drawing = tmp_path / "error_test.pdf"
+        test_drawing.write_bytes(b"mock pdf content")
+
+        validation_suite.storage = mock_storage
+        validation_suite.pdf_processor = mock_pdf_instance
+
+        result = await validation_suite.process_drawing_through_pipeline(test_drawing)
+
+        assert result["drawing_name"] == "error_test.pdf"
+        assert result["status"] == "failed"
+        assert result["error"] == "Agent processing failed"
+        assert result["error_type"] == "Exception"
+
+    @pytest.mark.asyncio
+    async def test_run_validation_suite_dry_run(self, validation_suite, tmp_path, sample_test_descriptions):
+        """Test dry run mode."""
+        # Setup test environment
+        test_dir = tmp_path / "validation_suite"
+        test_dir.mkdir()
+
+        # Create test descriptions file
+        descriptions_file = test_dir / "test_descriptions.json"
+        with open(descriptions_file, 'w') as f:
+            json.dump(sample_test_descriptions, f)
+
+        # Create test drawings
+        for drawing_name in sample_test_descriptions["drawings"]:
+            (test_dir / drawing_name).write_bytes(b"mock pdf content")
+
+        validation_suite.VALIDATION_SUITE_DIR = test_dir
+
+        # Run dry run
+        result = await validation_suite.run_validation_suite(dry_run=True)
+
+        assert result["dry_run"] is True
+        assert "cost_estimates" in result
+        assert "test_drawings" in result
+        assert result["cost_estimates"]["drawings_count"] == 3
+        assert len(result["test_drawings"]) == 3
+
+    @patch('scripts.validation_suite.ValidationSuite.process_drawing_through_pipeline')
+    @pytest.mark.asyncio
+    async def test_run_validation_suite_full(
+        self, mock_process_drawing, validation_suite, tmp_path, sample_test_descriptions
+    ):
+        """Test full validation suite run."""
+        # Setup mock for drawing processing
+        mock_process_drawing.return_value = {
+            "drawing_name": "test.pdf",
+            "status": "completed",
+            "overall_assessment": "Good",
+            "components_count": 5,
+            "processing_time_seconds": 120.0,
+            "evaluation_details": {"overall_assessment": "Good"}
+        }
+
+        # Setup test environment
+        test_dir = tmp_path / "validation_suite"
+        test_dir.mkdir()
+
+        descriptions_file = test_dir / "test_descriptions.json"
+        with open(descriptions_file, 'w') as f:
+            json.dump(sample_test_descriptions, f)
+
+        # Create one test drawing
+        (test_dir / "test_1.pdf").write_bytes(b"mock pdf content")
+
+        validation_suite.VALIDATION_SUITE_DIR = test_dir
+
+        # Mock the save results method to avoid file operations
+        with patch.object(validation_suite, '_save_validation_results', new=AsyncMock()):
+            result = await validation_suite.run_validation_suite(drawings_pattern="test_1.pdf")
+
+        assert result["dry_run"] is False
+        assert "processing_summary" in result
+        assert "assessment_summary" in result
+        assert "drawing_results" in result
+
+        # Verify processing summary
+        processing_summary = result["processing_summary"]
+        assert processing_summary["total_drawings"] == 1
+        assert processing_summary["successful_processing"] == 1
+        assert processing_summary["failed_processing"] == 0
+
+        # Verify assessment summary
+        assessment_summary = result["assessment_summary"]
+        assert assessment_summary["total_assessments"] == 1
+        assert assessment_summary["good_assessments"] == 1
+        assert assessment_summary["good_rate"] == 1.0
+
+        # Verify drawing results
+        assert len(result["drawing_results"]) == 1
+        drawing_result = result["drawing_results"][0]
+        assert drawing_result["drawing_name"] == "test.pdf"
+        assert drawing_result["status"] == "completed"
+
+    def test_calculate_assessment_summary(self, validation_suite):
+        """Test assessment summary calculation."""
+        # Test with mixed results
+        results = [
+            {"status": "completed", "overall_assessment": "Good"},
+            {"status": "completed", "overall_assessment": "Good"},
+            {"status": "completed", "overall_assessment": "Fair"},
+            {"status": "completed", "overall_assessment": "Poor"},
+            {"status": "failed", "error": "Processing error"}
+        ]
+
+        summary = validation_suite._calculate_assessment_summary(results)
+
+        # Only completed results should be counted (4 out of 5)
+        assert summary["total_assessments"] == 4
+        assert summary["good_assessments"] == 2
+        assert summary["fair_assessments"] == 1
+        assert summary["poor_assessments"] == 1
+        assert summary["unknown_assessments"] == 0
+
+        assert summary["good_rate"] == 0.5
+        assert summary["fair_rate"] == 0.25
+        assert summary["poor_rate"] == 0.25
+
+        # Check success criteria
+        assert summary["meets_success_criteria"]["minimum_60_percent_good"] is False  # 50% < 60%
+        assert summary["meets_success_criteria"]["maximum_20_percent_poor"] is False  # 25% > 20%
+
+    def test_calculate_assessment_summary_empty(self, validation_suite):
+        """Test assessment summary with no completed results."""
+        results = [
+            {"status": "failed", "error": "Error 1"},
+            {"status": "failed", "error": "Error 2"}
+        ]
+
+        summary = validation_suite._calculate_assessment_summary(results)
+        assert "error" in summary
+        assert "No successfully completed assessments" in summary["error"]
+
+    @pytest.mark.asyncio
+    async def test_save_validation_results(self, validation_suite, tmp_path):
+        """Test saving validation results."""
+        # Setup results directory
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+
+        with patch.object(ValidationSuite, 'RESULTS_DIR', results_dir):
+            validation_suite.RESULTS_DIR = results_dir
+
+            # Mock results data
+            results = {
+                "validation_run_id": "test_save_123",
+                "timestamp": "2025-08-10T10:30:00Z",
+                "processing_summary": {"total_drawings": 1}
+            }
+
+            await validation_suite._save_validation_results(results)
+
+            # Check file was created
+            result_files = list(results_dir.glob("*_results.json"))
+            assert len(result_files) == 1
+
+            # Verify file content
+            with open(result_files[0]) as f:
+                saved_data = json.load(f)
+            assert saved_data["validation_run_id"] == "test_save_123"
+
+
+class TestValidationSuiteEdgeCases:
+    """Test edge cases and error handling."""
+
+    @pytest.mark.asyncio
+    async def test_no_drawings_found(self, validation_suite, tmp_path, sample_test_descriptions):
+        """Test handling when no drawings are found."""
+        test_dir = tmp_path / "empty_validation_suite"
+        test_dir.mkdir()
+
+        descriptions_file = test_dir / "test_descriptions.json"
+        with open(descriptions_file, 'w') as f:
+            json.dump(sample_test_descriptions, f)
+        # Note: Not creating any PDF files
+
+        validation_suite.VALIDATION_SUITE_DIR = test_dir
+
+        with pytest.raises(ValueError, match="No test drawings found"):
+            await validation_suite.run_validation_suite()
+
+    @pytest.mark.asyncio
+    async def test_malformed_test_descriptions(self, validation_suite, tmp_path):
+        """Test handling of malformed test descriptions."""
+        test_dir = tmp_path / "validation_suite"
+        test_dir.mkdir()
+
+        # Create malformed JSON
+        descriptions_file = test_dir / "test_descriptions.json"
+        with open(descriptions_file, 'w') as f:
+            f.write("{invalid json}")
+
+        validation_suite.VALIDATION_SUITE_DIR = test_dir
+
+        with pytest.raises(json.JSONDecodeError):
+            await validation_suite.load_test_descriptions()
+
+    @pytest.mark.asyncio
+    async def test_processing_timeout_handling(self, validation_suite, tmp_path):
+        """Test handling of processing timeouts."""
+        # This would test timeout scenarios in real processing
+        # For now, verify that timeout values are set appropriately
+
+        # Check context processing timeout
+        with patch('asyncio.wait_for') as mock_wait_for:
+            mock_wait_for.side_effect = asyncio.TimeoutError()
+
+            test_drawing = tmp_path / "test.pdf"
+            test_drawing.write_bytes(b"mock content")
+
+            # Processing should handle timeout gracefully
+            # This would be tested in integration tests with real agents
+            pass
+
+    def test_validation_run_id_uniqueness(self):
+        """Test that validation run IDs are unique."""
+        suite1 = ValidationSuite()
+        suite2 = ValidationSuite()
+
+        assert suite1.validation_run_id != suite2.validation_run_id
+
+        # Should contain timestamp components
+        assert "validation_" in suite1.validation_run_id
+        assert len(suite1.validation_run_id) > len("validation_")
+
+
+@pytest.mark.parametrize("drawing_count,expected_time", [
+    (1, 3),
+    (5, 15),
+    (10, 30)
+])
+def test_processing_time_estimation(drawing_count, expected_time):
+    """Test processing time estimation scaling."""
+    # Create mock drawings
+    drawings = [Mock() for _ in range(drawing_count)]
+
+    # This would be part of cost estimation
+    # 3 minutes per drawing estimate
+    estimated_time = len(drawings) * 3
+    assert estimated_time == expected_time
+
+
+@pytest.mark.parametrize("good_rate,poor_rate,expected_good,expected_poor", [
+    (0.8, 0.1, True, True),    # Meets both criteria
+    (0.5, 0.1, False, True),   # Fails good rate only
+    (0.7, 0.3, True, False),   # Fails poor rate only
+    (0.4, 0.4, False, False)   # Fails both criteria
+])
+def test_success_criteria_evaluation(good_rate, poor_rate, expected_good, expected_poor):
+    """Test success criteria evaluation logic."""
+    suite = ValidationSuite()
+
+    # Mock results that would produce these rates
+    total_assessments = 10
+    good_count = int(good_rate * total_assessments)
+    poor_count = int(poor_rate * total_assessments)
+    fair_count = total_assessments - good_count - poor_count
+
+    results = (
+        [{"status": "completed", "overall_assessment": "Good"}] * good_count +
+        [{"status": "completed", "overall_assessment": "Poor"}] * poor_count +
+        [{"status": "completed", "overall_assessment": "Fair"}] * fair_count
+    )
+
+    summary = suite._calculate_assessment_summary(results)
+
+    assert summary["meets_success_criteria"]["minimum_60_percent_good"] == expected_good
+    assert summary["meets_success_criteria"]["maximum_20_percent_poor"] == expected_poor

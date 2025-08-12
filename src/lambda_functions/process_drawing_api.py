@@ -10,16 +10,16 @@ from botocore.exceptions import ClientError
 
 from src.config.settings import settings
 from src.models.job import JobStatus
+from src.utils.cloudwatch_metrics import get_metrics_client
+from src.utils.error_handlers import (
+    create_api_error_response,
+    create_correlation_id,
+    log_lambda_metrics,
+    log_structured_error,
+)
 from src.utils.id_generator import generate_job_id
 from src.utils.storage_manager import StorageManager
 from src.utils.validators import validate_file_size, validate_pdf_file
-from src.utils.error_handlers import (
-    create_correlation_id,
-    log_structured_error,
-    log_lambda_metrics,
-    create_api_error_response
-)
-from src.utils.cloudwatch_metrics import get_metrics_client
 
 # Configure structured logging
 logging.basicConfig(
@@ -37,10 +37,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     AWS Lambda handler for processing drawing upload requests.
 
     This function:
-    1. Validates the uploaded PDF file
-    2. Generates a job ID and saves initial status to DynamoDB
-    3. Sends a message to SQS for async processing
-    4. Returns job_id and status immediately
+    1. Checks if this is a warmer request and handles it early
+    2. Validates the uploaded PDF file
+    3. Generates a job ID and saves initial status to DynamoDB
+    4. Sends a message to SQS for async processing
+    5. Returns job_id and status immediately
 
     Args:
         event: Lambda event containing API Gateway request
@@ -49,11 +50,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         API Gateway response with job_id and status
     """
+    # Check for warmer request early to minimize cold start impact
+    from src.lambda_functions.lambda_warmer import check_and_handle_warmer
+    if check_and_handle_warmer(event):
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Function warmed successfully', 'warmer': True})
+        }
+
     # Track execution metrics
     start_time = time.time()
     function_name = context.function_name if context else "process_drawing_api"
     correlation_id = create_correlation_id()
-    
+
     # Log structured request start
     logger.info(json.dumps({
         "event_type": "api_request",
@@ -299,7 +308,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         metrics = get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
         request_size = len(json.dumps(event).encode('utf-8')) if event else 0
         response_size = len(json.dumps(response_data).encode('utf-8'))
-        
+
         metrics.track_api_metrics(
             endpoint="/process-drawing",
             method="POST",
@@ -323,7 +332,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     except Exception as e:
         execution_time = time.time() - start_time
-        
+
         log_structured_error(
             e,
             {

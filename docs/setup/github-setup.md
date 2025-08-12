@@ -1,22 +1,41 @@
 # GitHub Setup Documentation
 
-## Repository Structure
+## Account Structure & Roles
 
-### Current Repository Structure
+### GitHub Account Hierarchy
 ```
-7-central (Account Owner)
-├── Username: 7-central  
+7-central (Organization Account)
+├── Account Type: Organization account for 7Central business
 ├── Email: info@7central.co.uk
+├── Managed By: Lee Hayton (junksamiad) with full admin access
 └── security-design-assistant (Repository)
     ├── main (Production branch)
     └── develop (Staging branch)
-    └── Collaborators:
-        └── junksamiad (Lee Hayton) - Push access
 ```
 
-**Repository URL**: https://github.com/7-central/security-design-assistant
+### Key Personnel & Roles
 
-*Note: Future expansion planned for 7Central GitHub Organization with separate repos for Security, Argan-HR, and Tier8 business units.*
+| Person | Role | GitHub Username | Access Level | Responsibilities |
+|--------|------|----------------|--------------|------------------|
+| Ric | Product Owner | @RICG777 (personal) | Owner (via 7-central) | Business decisions, approvals |
+| Lee Hayton | Developer/DevOps | @junksamiad | Admin on 7-central account + Collaborator | Development, CI/CD setup, repo management |
+
+### Important Context
+- **7-central account**: Created by Lee on behalf of Ric (Product Owner) to properly organize business repositories
+- **@junksamiad (Lee)**: Has full admin access to 7-central account for setup and management, plus collaborator access for development
+- **@RICG777**: Ric's personal GitHub account (not used for this project, but may be referenced in future)
+- **Repository URL**: https://github.com/7-central/security-design-assistant
+
+### Access Clarification
+- **Lee (junksamiad)** can:
+  - ✅ Create and manage repositories under 7-central
+  - ✅ Configure GitHub secrets and settings
+  - ✅ Set up branch protection rules
+  - ✅ Manage CI/CD workflows
+  - ✅ Push code as collaborator
+  - ✅ Admin all aspects of 7-central account
+  
+- **Future State**: Additional developers will be added as collaborators with appropriate access levels
 
 ## Repository Configuration
 
@@ -53,31 +72,45 @@
 
 ## Access Management
 
-### Collaborators
+### Current Setup
 
-1. **7-central** - Owner
-   - Account: info@7central.co.uk
-   - Full repository access
-   - Settings management
-   - Deployment approvals
-   - Personal Access Token configured for CI/CD
+1. **7-central** - Organization Account
+   - Managed by: Lee Hayton (@junksamiad) with admin access
+   - Account email: info@7central.co.uk
+   - Purpose: Host all 7Central business repositories
+   - Lee can configure all settings, secrets, and CI/CD
 
-2. **junksamiad** (Lee Hayton) - Developer  
+2. **junksamiad** (Lee Hayton) - Developer/Admin
    - Email: junksamiad@gmail.com
-   - Push access granted
-   - Create branches and pull requests
-   - Local development and commits
+   - Dual role:
+     - Admin access to 7-central account (can configure everything)
+     - Collaborator on repos for development work
+   - Responsibilities:
+     - Repository setup and management
+     - GitHub secrets configuration
+     - CI/CD pipeline setup
+     - Development and code commits
 
 ### Development Workflow
 
+Since Lee has admin access to 7-central account, the workflow is streamlined:
+
 ```mermaid
 graph LR
-    A[Local: junksamiad] -->|push| B[Remote: feature branch]
+    A[Local: Lee/junksamiad] -->|push| B[Remote: feature branch]
     B -->|PR| C[Remote: develop]
-    C -->|PR + Approval| D[Remote: main]
-    C -->|Auto Deploy| E[AWS: Staging]
-    D -->|Auto Deploy| F[AWS: Production]
+    C -->|PR| D[Remote: main]
+    A -->|Can also configure| E[GitHub Secrets]
+    A -->|Can also configure| F[Branch Protection]
+    C -->|Auto Deploy| G[AWS: Staging]
+    D -->|Auto Deploy| H[AWS: Production]
 ```
+
+**Key Points:**
+- Lee works locally as @junksamiad
+- Pushes code to 7-central/security-design-assistant
+- Can directly configure all repository settings via 7-central admin access
+- No need to coordinate with another admin for secrets or settings
 
 ## Git Configuration
 
@@ -97,17 +130,19 @@ git remote -v
 
 ### Authentication
 
-For pushing to 7-central's repository from junksamiad account:
+For Lee (junksamiad) pushing to 7-central's repository:
 
 ```bash
-# Current setup: junksamiad has been added as collaborator with push access
-# Standard HTTPS authentication will work with GitHub credentials
+# Lee has dual access:
+# 1. Admin access to 7-central account (for configuration)
+# 2. Collaborator access to repos (for development)
 
 # Option 1: Use GitHub CLI (Recommended)
 gh auth login
+# Authenticate with junksamiad account
 # Then work normally with git commands
 
-# Option 2: Use Personal Access Token (if needed)
+# Option 2: Use Personal Access Token
 git remote set-url origin https://junksamiad:TOKEN@github.com/7-central/security-design-assistant.git
 
 # Option 3: Use SSH key (if configured)
@@ -117,11 +152,20 @@ git remote set-url origin git@github.com:7-central/security-design-assistant.git
 ### Current Configuration Status
 
 ```bash
-# Repository details
+# Repository Structure
+Organization: 7-central (managed by Lee/junksamiad)
 Repository: 7-central/security-design-assistant
-Owner: 7-central (info@7central.co.uk)
-Collaborator: junksamiad (junksamiad@gmail.com) with push access
+Repository URL: https://github.com/7-central/security-design-assistant.git
+
+# Access Configuration
+Admin of 7-central: junksamiad (Lee Hayton)
+Collaborator on repo: junksamiad (Lee Hayton)
 Local git user: Lee Hayton <junksamiad@gmail.com>
+
+# Practical Impact
+- Lee can push code as junksamiad
+- Lee can configure secrets via 7-central admin access
+- Lee can set up CI/CD without external coordination
 ```
 
 ## Branch Strategy
@@ -349,18 +393,30 @@ Thumbs.db
 ```
 
 ### CODEOWNERS
-Create `CODEOWNERS` file:
+Create `.github/CODEOWNERS` file:
 ```
-# Default owners for everything
-* @RICG777 @junksamiad
+# Code ownership structure for PR reviews
+# Note: @RICG777 is Ric's personal account (Product Owner)
+# @junksamiad is Lee's account (Developer/Admin)
 
-# Infrastructure
-/infrastructure/ @RICG777
-/scripts/ @RICG777
+# Default owners for everything
+* @junksamiad
+
+# Future: When Ric joins GitHub development
+# * @RICG777 @junksamiad
+
+# Infrastructure and deployment
+/infrastructure/ @junksamiad
+/.github/ @junksamiad
+/scripts/ @junksamiad
 
 # Application code
 /src/ @junksamiad
 /tests/ @junksamiad
+
+# Documentation (for future PO review)
+/docs/prd/ @junksamiad
+/docs/stories/ @junksamiad
 ```
 
 ## Deployment Strategy
@@ -429,8 +485,10 @@ Create `CODEOWNERS` file:
    ```bash
    # Check remote URL
    git remote -v
-   # Update with correct credentials
-   git remote set-url origin https://TOKEN@github.com/RICG777/repo.git
+   # Should show: https://github.com/7-central/security-design-assistant.git
+   
+   # If needed, update with correct credentials
+   git remote set-url origin https://junksamiad:TOKEN@github.com/7-central/security-design-assistant.git
    ```
 
 2. **Merge Conflicts**
@@ -450,9 +508,11 @@ Create `CODEOWNERS` file:
 
 ## Next Steps
 
-1. Create repository on RICG777 account
-2. Configure branch protection rules
-3. Add GitHub Actions secrets
-4. Set up initial CI/CD workflows
-5. Configure Dependabot
+1. ~~Create repository on 7-central account~~ ✅ DONE
+2. Configure branch protection rules (Lee can do via 7-central admin)
+3. Add GitHub Actions secrets (Lee can do via 7-central admin)
+4. Set up initial CI/CD workflows (Story 4.3.1)
+5. Configure Dependabot for security updates
 6. Create first feature branch and test workflow
+
+**Note**: Since Lee has admin access to 7-central, all configuration can be done directly without coordination.

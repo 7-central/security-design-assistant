@@ -1,0 +1,44 @@
+{
+  "Parameters": {
+    "Environment": "prod",
+    "LambdaMemorySize": 2048,
+    "LambdaTimeout": 900,
+    "TrafficShiftingTimeoutInMinutes": 10,
+    "TrafficShiftingPercentage": 5
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Project": "SecurityAssistant",
+    "Owner": "ProductionTeam",
+    "CostCenter": "Operations",
+    "Purpose": "Production workloads",
+    "Compliance": "SOC2"
+  },
+  "Configuration": {
+    "MonitoringLevel": "comprehensive",
+    "LogRetentionDays": 90,
+    "AutoScaling": {
+      "MinCapacity": 5,
+      "MaxCapacity": 50,
+      "TargetUtilization": 50
+    },
+    "AlarmThresholds": {
+      "ErrorRate": 0.05,
+      "Duration": 10000,
+      "ThrottleRate": 0.01
+    },
+    "BackupRetention": 365,
+    "DisasterRecovery": true,
+    "Security": {
+      "EncryptionAtRest": true,
+      "EncryptionInTransit": true,
+      "VPCEndpoints": true,
+      "PrivateSubnets": true
+    },
+    "Compliance": {
+      "AuditLogging": true,
+      "DataRetention": "7years",
+      "AccessLogging": true
+    }
+  }
+}

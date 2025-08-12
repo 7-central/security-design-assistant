@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Development resources for Security Design Assistant
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name
+
+Resources:
+  DevS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: security-assistant-dev-445567098699
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 7
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: SecurityDesignAssistant
+        - Key: ManagedBy
+          Value: SAM
+
+  DevJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: security-assistant-dev-jobs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: company_client_key
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: company-client-index
+          KeySchema:
+            - AttributeName: company_client_key
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: SecurityDesignAssistant
+        - Key: ManagedBy
+          Value: SAM
+
+Outputs:
+  DevS3BucketName:
+    Description: Name of the development S3 bucket
+    Value: !Ref DevS3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-S3Bucket"
+
+  DevDynamoDBTableName:
+    Description: Name of the development DynamoDB table
+    Value: !Ref DevJobsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTable"
+
+  EstimatedMonthlyCost:
+    Description: Estimated monthly cost for dev resources
+    Value: <$1/month (S3 with 7-day lifecycle + DynamoDB on-demand)

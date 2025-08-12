@@ -5,14 +5,14 @@ import time
 from datetime import UTC
 from typing import Any
 
-from src.utils.storage_manager import StorageManager
-from src.utils.error_handlers import (
-    create_correlation_id,
-    log_structured_error,
-    log_lambda_metrics,
-    create_api_error_response
-)
 from src.utils.cloudwatch_metrics import get_metrics_client
+from src.utils.error_handlers import (
+    create_api_error_response,
+    create_correlation_id,
+    log_lambda_metrics,
+    log_structured_error,
+)
+from src.utils.storage_manager import StorageManager
 
 # Configure structured logging
 logging.basicConfig(
@@ -27,10 +27,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     AWS Lambda handler for getting job status.
 
     This function:
-    1. Extracts job_id from path parameters
-    2. Queries DynamoDB for job status and progress information
-    3. Returns structured response per REST API spec
-    4. Includes download URLs for completed files
+    1. Checks if this is a warmer request and handles it early
+    2. Extracts job_id from path parameters
+    3. Queries DynamoDB for job status and progress information
+    4. Returns structured response per REST API spec
+    5. Includes download URLs for completed files
 
     Args:
         event: Lambda event containing API Gateway request
@@ -39,11 +40,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         API Gateway response with job status
     """
+    # Check for warmer request early to minimize cold start impact
+    from src.lambda_functions.lambda_warmer import check_and_handle_warmer
+    if check_and_handle_warmer(event):
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Function warmed successfully', 'warmer': True})
+        }
+
     # Track execution metrics
     start_time = time.time()
     function_name = context.function_name if context else "get_job_status"
     correlation_id = create_correlation_id()
-    
+
     # Log structured request start
     logger.info(json.dumps({
         "event_type": "status_request",
@@ -68,7 +77,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         if not job_id:
             return create_api_error_response(400, "job_id cannot be empty", correlation_id=correlation_id)
-            
+
         # Update correlation ID with job ID
         correlation_id = create_correlation_id(job_id)
 
@@ -259,7 +268,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         metrics = get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
         response_body = json.dumps(response, indent=2)
         response_size = len(response_body.encode('utf-8'))
-        
+
         metrics.track_api_metrics(
             endpoint=f"/status/{job_id}",
             method="GET",
@@ -268,11 +277,23 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             response_size_bytes=response_size
         )
 
+        # Determine cache headers based on job status
+        from src.utils.env_cache import get_cache_headers
+        cache_headers = {}
+
+        if status in ['completed', 'failed']:
+            # Cache completed/failed jobs for longer (1 hour)
+            cache_headers = get_cache_headers(max_age=3600)
+        elif status in ['processing', 'queued']:
+            # Cache in-progress jobs for shorter time (1 minute)
+            cache_headers = get_cache_headers(max_age=60)
+
         return {
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
+                **cache_headers,
                 'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
                 'Access-Control-Allow-Methods': 'GET,OPTIONS',
                 'X-Correlation-ID': correlation_id
@@ -282,7 +303,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     except Exception as e:
         execution_time = time.time() - start_time
-        
+
         log_structured_error(
             e,
             {

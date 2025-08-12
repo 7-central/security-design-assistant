@@ -1,14 +1,20 @@
+version = 0.1
+
 # SAM configuration for deployment
 
 [default.deploy.parameters]
 stack_name = "security-assistant-dev"
 s3_bucket = "security-assistant-sam-deployments"
-region = "us-east-1"
+region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = [
     "Environment=dev",
-    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE",
+    "LambdaMemorySize=512",
+    "LambdaTimeout=300",
+    "TrafficShiftingTimeoutInMinutes=2",
+    "TrafficShiftingPercentage=50"
 ]
 
 [default.build.parameters]
@@ -16,24 +22,67 @@ cached = true
 parallel = true
 use_container = false
 
+[default.sync.parameters]
+watch = true
+dependency_layer = true
+skip_deploy_sync = false
+stack_name = "security-assistant-dev"
+
+[dev.deploy.parameters]
+stack_name = "security-assistant-dev"
+s3_bucket = "security-assistant-sam-deployments"
+region = "eu-west-2"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE",
+    "LambdaMemorySize=512",
+    "LambdaTimeout=300",
+    "TrafficShiftingTimeoutInMinutes=2",
+    "TrafficShiftingPercentage=50"
+]
+
 [staging.deploy.parameters]
 stack_name = "security-assistant-staging"
 s3_bucket = "security-assistant-sam-deployments"
-region = "us-east-1"
+region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
+disable_rollback = false
+on_failure = "ROLLBACK"
 parameter_overrides = [
     "Environment=staging",
-    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE",
+    "LambdaMemorySize=1024",
+    "LambdaTimeout=600",
+    "TrafficShiftingTimeoutInMinutes=5",
+    "TrafficShiftingPercentage=10"
 ]
+
+[staging.build.parameters]
+cached = true
+parallel = true
+use_container = false
 
 [prod.deploy.parameters]
 stack_name = "security-assistant-prod"
 s3_bucket = "security-assistant-sam-deployments"
-region = "us-east-1"
+region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
+disable_rollback = false
+on_failure = "ROLLBACK"
 parameter_overrides = [
     "Environment=prod",
-    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE"
+    "GeminiApiKey=YOUR_GEMINI_API_KEY_HERE",
+    "LambdaMemorySize=2048",
+    "LambdaTimeout=900",
+    "TrafficShiftingTimeoutInMinutes=10",
+    "TrafficShiftingPercentage=5"
 ]
+
+[prod.build.parameters]
+cached = true
+parallel = true
+use_container = false

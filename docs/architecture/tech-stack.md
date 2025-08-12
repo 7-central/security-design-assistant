@@ -37,6 +37,13 @@
 
 ## Development Mode Clarification
 
-**Local Development**: Uses file system mode with environment variables to simulate AWS services locally without any AWS dependencies. FastAPI runs with `uvicorn` and stores files locally.
+**Local Development (Updated per Story 4.3.1)**:
+- **Unit Tests**: Use file system mode with `STORAGE_MODE=local`
+- **E2E Tests**: Use dev AWS resources with `STORAGE_MODE=aws` and `ENV=dev`
+  - Dev S3: `security-assistant-dev-445567098699`
+  - Dev DynamoDB: `security-assistant-dev-jobs`
+- **FastAPI**: Runs with `uvicorn` for local testing
 
-**Production Deployment**: SAM templates define AWS infrastructure and deploy to cloud. The same code switches behavior based on `STORAGE_MODE` environment variable.
+**Production Deployment**: SAM templates define AWS infrastructure and deploy to cloud. The same code switches behavior based on environment variables:
+- `STORAGE_MODE`: "local" (file system) or "aws" (cloud resources)
+- `ENV`: "dev" (dev resources), "staging", or "prod"
