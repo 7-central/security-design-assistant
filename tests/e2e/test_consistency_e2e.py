@@ -90,10 +90,7 @@ class TestConsistencyE2E:
         # Calculate variance in component counts
         if component_counts:
             mean_count = statistics.mean(component_counts)
-            if mean_count > 0:
-                variance_pct = (max(component_counts) - min(component_counts)) / mean_count * 100
-            else:
-                variance_pct = 0
+            variance_pct = (max(component_counts) - min(component_counts)) / mean_count * 100 if mean_count > 0 else 0
         else:
             variance_pct = 100
 

@@ -23,7 +23,7 @@ class TestErrorHandlingE2E:
 
         try:
             # Upload non-PDF file
-            e2e_job_helper.upload_pdf(job_id, invalid_file)
+            s3_uri = e2e_job_helper.upload_pdf(job_id, invalid_file)
 
             # Create job
             table = aws_clients['dynamodb'].Table(e2e_job_helper.table_name)
@@ -128,7 +128,7 @@ class TestErrorHandlingE2E:
 
         try:
             # Use complex PDF that might take longer to process
-            s3_uri = e2e_job_helper.upload_pdf(job_id, complex_pdf_path)
+            e2e_job_helper.upload_pdf(job_id, complex_pdf_path)
 
             # Try to wait with very short timeout
             with pytest.raises(TimeoutError) as exc_info:
