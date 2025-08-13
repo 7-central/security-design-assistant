@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from decimal import Decimal
 from typing import Any
@@ -8,6 +7,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
+from src.config.settings import settings
 from src.storage.interface import StorageInterface
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AWSStorage(StorageInterface):
     """AWS S3 and DynamoDB implementation of storage interface."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize AWS storage with S3 and DynamoDB clients with connection pooling."""
         # Configure connection pooling for better performance
         config = Config(
@@ -37,8 +37,8 @@ class AWSStorage(StorageInterface):
         # S3 batch processor for request consolidation
         self._batch_processor = None
 
-        self.s3_bucket = os.getenv('S3_BUCKET', 'security-assistant-files')
-        self.dynamodb_table_name = os.getenv('DYNAMODB_TABLE', 'security-assistant-jobs')
+        self.s3_bucket = settings.s3_bucket
+        self.dynamodb_table_name = settings.dynamodb_table
 
         # Initialize DynamoDB table reference
         try:
@@ -201,7 +201,7 @@ class AWSStorage(StorageInterface):
             # Create date bucket for GSI3 (YYYY-MM format)
             if 'created_at' in status_data:
                 created_timestamp = status_data['created_at']
-                if isinstance(created_timestamp, (int, float)):
+                if isinstance(created_timestamp, int | float):
                     # Convert timestamp to YYYY-MM format
                     import datetime
                     date_obj = datetime.datetime.fromtimestamp(created_timestamp)

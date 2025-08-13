@@ -152,7 +152,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             "uploaded_at": datetime.utcnow().isoformat()
         }
 
-        drawing_s3_path = await_sync(storage.save_file(
+        await_sync(storage.save_file(
             drawing_s3_key,
             file_content,
             drawing_metadata
@@ -225,7 +225,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         }
 
         # Send message to SQS queue
-        queue_url = settings.SQS_QUEUE_URL
+        queue_url = settings.sqs_queue_url
         if not queue_url:
             log_structured_error(
                 Exception("SQS_QUEUE_URL environment variable not set"),

@@ -31,10 +31,9 @@ jobs:
         run: |
           ruff check src/ tests/
       
-      # Temporarily disabled mypy - 132 type errors need incremental fixing
-      # - name: Run mypy type checker
-      #   run: |
-      #     mypy src/ --ignore-missing-imports
+      - name: Run mypy type checker
+        run: |
+          mypy src/ --ignore-missing-imports
 
   unit-tests:
     name: Unit Tests

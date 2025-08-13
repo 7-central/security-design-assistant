@@ -50,9 +50,8 @@ class TestRetryWithExponentialBackoff:
         """Test rate limit exceeded with max retries."""
         mock_func = AsyncMock(side_effect=google_exceptions.ResourceExhausted("Rate limit exceeded"))
 
-        with patch('asyncio.sleep', new_callable=AsyncMock):
-            with pytest.raises(RateLimitExceededException):
-                await retry_with_exponential_backoff(mock_func, max_retries=2)
+        with patch('asyncio.sleep', new_callable=AsyncMock), pytest.raises(RateLimitExceededException):
+            await retry_with_exponential_backoff(mock_func, max_retries=2)
 
         assert mock_func.call_count == 3  # Initial + 2 retries
 
@@ -133,7 +132,7 @@ class TestExponentialBackoffCalculation:
     def test_jitter_applied(self):
         """Test that jitter is applied when enabled."""
         delay_no_jitter = _calculate_exponential_backoff(1, 2.0, 60.0, False)
-        delay_with_jitter = _calculate_exponential_backoff(1, 2.0, 60.0, True)
+        _calculate_exponential_backoff(1, 2.0, 60.0, True)
 
         # With jitter, delay should be different (unless very unlucky)
         # Test multiple times to reduce flakiness

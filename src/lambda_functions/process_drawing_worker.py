@@ -135,7 +135,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # Initialize storage and metrics
     storage = StorageManager.get_storage()
-    metrics = get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
+    get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
     processed_records = []
     error_count = 0
 
@@ -374,7 +374,7 @@ async def process_job_stages(
     )
 
     # Stage 5: Judge Evaluation
-    evaluation_result = await handle_stage_with_metrics(
+    await handle_stage_with_metrics(
         "evaluation",
         process_judge_evaluation_stage,
         job_id,
@@ -720,7 +720,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
         Processing results
     """
     job_id = message_body['job_id']
-    company_client_job = message_body['company_client_job']
+    message_body['company_client_job']
     drawing_s3_key = message_body['drawing_s3_key']
     context_s3_key = message_body.get('context_s3_key')
     context_text = message_body.get('context_text')

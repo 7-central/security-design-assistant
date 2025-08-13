@@ -177,7 +177,7 @@ Write and execute the Python code to generate this Excel file."""
 
                     if "EXCEL_BASE64:" in output:
                         base64_data = output.split("EXCEL_BASE64:")[1].strip()
-                        return base64_data
+                        return str(base64_data)
 
             logger.warning("No Excel base64 data found in Gemini response")
             return None

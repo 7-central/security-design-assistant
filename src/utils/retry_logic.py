@@ -8,7 +8,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from google.api_core import exceptions as google_exceptions
 
@@ -32,7 +32,7 @@ async def retry_with_exponential_backoff(
     base_delay: float = 2.0,
     max_delay: float = 60.0,
     jitter: bool = True,
-    context_timeout_remaining: Optional[float] = None,
+    context_timeout_remaining: float | None = None,
     **kwargs
 ) -> Any:
     """
@@ -189,7 +189,7 @@ def _calculate_exponential_backoff(
     return delay
 
 
-def _extract_rate_limit_reset(exception: google_exceptions.ResourceExhausted) -> Optional[float]:
+def _extract_rate_limit_reset(exception: google_exceptions.ResourceExhausted) -> float | None:
     """
     Extract rate limit reset time from exception headers.
 

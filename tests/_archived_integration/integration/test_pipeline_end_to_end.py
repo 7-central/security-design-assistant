@@ -227,7 +227,7 @@ def data_integrity_checks(job_response):
         # Check timestamps are valid
         created_at = job_response.get('created_at')
         if created_at:
-            if not isinstance(created_at, (int, float)):
+            if not isinstance(created_at, int | float):
                 issues.append(f"Invalid created_at timestamp: {created_at}")
             elif created_at > time.time():
                 issues.append(f"created_at is in the future: {created_at}")

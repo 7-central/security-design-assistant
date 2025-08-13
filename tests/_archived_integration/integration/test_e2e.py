@@ -123,10 +123,7 @@ class TestE2EPipeline:
 
         # Handle relative path - prepend local_output if needed
         file_path = result["file_path"]
-        if not file_path.startswith("/"):
-            excel_path = Path("local_output") / file_path
-        else:
-            excel_path = Path(file_path)
+        excel_path = Path("local_output") / file_path if not file_path.startswith("/") else Path(file_path)
 
         assert excel_path.exists(), f"Excel file not found at {excel_path}"
 
@@ -147,7 +144,7 @@ class TestE2EPipeline:
         assert len(invalid_ids) == 0, f"Invalid door IDs found: {invalid_ids}"
 
         # Accuracy measurement (AC: 6)
-        expected_doors = set(door["id"] for door in baseline["doors"])
+        expected_doors = {door["id"] for door in baseline["doors"]}
         found_doors = set(door_ids)
 
         correctly_identified = found_doors.intersection(expected_doors)
@@ -394,7 +391,7 @@ class TestSecurityScenarios:
 
         # Rapid submissions
         responses = []
-        for i in range(5):
+        for _i in range(5):
             response = self.submit_drawing_basic(pdf_path)
             responses.append(response.status_code)
 

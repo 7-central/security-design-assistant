@@ -142,7 +142,7 @@ class TestPromptVersioning:
 
         # Check that one entry contains our metrics
         entry_found = False
-        for timestamp, perf_data in performance_entries.items():
+        for _timestamp, perf_data in performance_entries.items():
             if perf_data.get("assessment") == "Good":
                 entry_found = True
                 assert perf_data["accuracy"] == 0.85
@@ -153,7 +153,7 @@ class TestPromptVersioning:
     def test_schedule_agent_with_version(self, storage, test_job, temp_prompt_manager):
         """Test ScheduleAgentV2 with specific prompt versions."""
         # Monkey patch the prompt manager path
-        original_path = Path("src/config/prompts")
+        Path("src/config/prompts")
 
         # Create agent with version 1
         agent_v1 = ScheduleAgentV2(storage, test_job, prompt_version=1)

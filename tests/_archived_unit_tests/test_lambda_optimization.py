@@ -15,7 +15,7 @@ class TestLambdaPowerTuner:
     @pytest.fixture
     def tuner(self):
         """Create LambdaPowerTuner instance with mocked AWS clients."""
-        with patch('boto3.client') as mock_client:
+        with patch('boto3.client'):
             yield LambdaPowerTuner()
 
     def test_memory_calculation_maintain(self, tuner):
@@ -212,7 +212,7 @@ class TestConnectionPooling:
         from src.storage.aws_storage import AWSStorage
 
         # Create AWSStorage instance
-        storage = AWSStorage()
+        AWSStorage()
 
         # Verify boto3 clients were called with connection pooling config
         mock_client.assert_called()

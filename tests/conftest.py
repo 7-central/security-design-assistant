@@ -21,9 +21,8 @@ def test_client() -> TestClient:
 @pytest.fixture
 def temp_output_dir() -> Generator[Path, None, None]:
     """Create a temporary output directory for testing."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        with patch.dict(os.environ, {'LOCAL_OUTPUT_DIR': temp_dir}):
-            yield Path(temp_dir)
+    with tempfile.TemporaryDirectory() as temp_dir, patch.dict(os.environ, {'LOCAL_OUTPUT_DIR': temp_dir}):
+        yield Path(temp_dir)
 
 
 @pytest.fixture

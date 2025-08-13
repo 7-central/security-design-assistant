@@ -20,7 +20,9 @@ class TestAWSStorageDynamoDBOperations:
             'AWS_ACCESS_KEY_ID': 'testing',
             'AWS_SECRET_ACCESS_KEY': 'testing',
             'AWS_DEFAULT_REGION': 'us-east-1'
-        }):
+        }), patch('src.storage.aws_storage.settings') as mock_settings:
+            mock_settings.s3_bucket = 'test-bucket'
+            mock_settings.dynamodb_table = 'test-jobs-table'
             return AWSStorage()
 
     @pytest.fixture

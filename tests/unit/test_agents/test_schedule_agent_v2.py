@@ -40,10 +40,10 @@ def sample_job():
 def schedule_agent_v2(mock_storage, sample_job):
     """Create a Schedule Agent V2 instance."""
     with patch('src.agents.base_agent_v2.settings') as mock_base_settings:
-        mock_base_settings.GEMINI_API_KEY = "test-api-key"
+        mock_base_settings.gemini_api_key = "test-api-key"
         with patch('src.agents.schedule_agent_v2.settings') as mock_settings:
-            mock_settings.GEMINI_API_KEY = "test-api-key"
-            mock_settings.GEMINI_MODEL = "gemini-2.5-pro"
+            mock_settings.gemini_api_key = "test-api-key"
+            mock_settings.gemini_model = "gemini-2.5-pro"
             agent = ScheduleAgentV2(mock_storage, sample_job)
             # Mock the _client attribute directly instead of the property
             agent._client = Mock()
@@ -57,9 +57,9 @@ class TestScheduleAgentV2:
     def test_initialization(self, mock_storage, sample_job):
         """Test agent initialization."""
         with patch('src.agents.base_agent_v2.settings') as mock_settings:
-            mock_settings.GEMINI_API_KEY = "test-api-key"
+            mock_settings.gemini_api_key = "test-api-key"
             with patch('src.agents.schedule_agent_v2.settings') as mock_settings2:
-                mock_settings2.GEMINI_API_KEY = "test-api-key"
+                mock_settings2.gemini_api_key = "test-api-key"
                 agent = ScheduleAgentV2(mock_storage, sample_job)
                 assert agent.storage == mock_storage
                 assert agent.job == sample_job
@@ -68,7 +68,7 @@ class TestScheduleAgentV2:
     def test_initialization_no_api_key(self, mock_storage, sample_job):
         """Test initialization fails without API key."""
         with patch('src.agents.base_agent_v2.settings') as mock_settings:
-            mock_settings.GEMINI_API_KEY = None
+            mock_settings.gemini_api_key = None
             agent = ScheduleAgentV2(mock_storage, sample_job)
             # With lazy loading, the error occurs when accessing the client
             with pytest.raises(ValueError, match="GEMINI_API_KEY environment variable is required"):

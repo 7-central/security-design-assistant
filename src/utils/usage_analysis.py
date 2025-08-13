@@ -99,7 +99,6 @@ class UsageAnalyzer:
         end_time: datetime
     ) -> dict[str, Any]:
         """Analyze a single Lambda function's usage patterns."""
-        metrics = {}
 
         # Get invocation metrics
         invocation_data = await self._get_cloudwatch_metric(

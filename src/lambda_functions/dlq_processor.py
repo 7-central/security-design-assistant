@@ -423,7 +423,7 @@ def await_sync(coro):
 
     try:
         # Get the current event loop if it exists
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
         # If we're already in an async context, we shouldn't be here
         # This would indicate a design issue
         raise RuntimeError("await_sync called from within async context")

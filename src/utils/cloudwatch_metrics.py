@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -104,8 +104,8 @@ class CloudWatchMetrics:
         stage_name: str,
         duration_seconds: float,
         status: str = "completed",
-        client_name: Optional[str] = None,
-        project_name: Optional[str] = None
+        client_name: str | None = None,
+        project_name: str | None = None
     ) -> bool:
         """
         Track job processing duration by pipeline stage.
@@ -165,7 +165,7 @@ class CloudWatchMetrics:
         input_tokens: int,
         output_tokens: int,
         operation: str,
-        estimated_cost: Optional[float] = None
+        estimated_cost: float | None = None
     ) -> bool:
         """
         Track Gemini API token usage and estimated costs.
@@ -250,7 +250,7 @@ class CloudWatchMetrics:
         job_id: str,
         stage_name: str,
         success: bool,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
         retry_count: int = 0
     ) -> bool:
         """
@@ -310,10 +310,10 @@ class CloudWatchMetrics:
         self,
         function_name: str,
         execution_time: float,
-        memory_used_mb: Optional[int] = None,
+        memory_used_mb: int | None = None,
         success: bool = True,
-        error_type: Optional[str] = None,
-        job_id: Optional[str] = None
+        error_type: str | None = None,
+        job_id: str | None = None
     ) -> bool:
         """
         Track Lambda function performance metrics.
@@ -378,8 +378,8 @@ class CloudWatchMetrics:
         method: str,
         status_code: int,
         response_time: float,
-        request_size_bytes: Optional[int] = None,
-        response_size_bytes: Optional[int] = None
+        request_size_bytes: int | None = None,
+        response_size_bytes: int | None = None
     ) -> bool:
         """
         Track API Gateway request metrics.
@@ -460,7 +460,7 @@ class CloudWatchMetrics:
         self,
         queue_name: str,
         approximate_message_count: int,
-        approximate_message_age_seconds: Optional[int] = None
+        approximate_message_age_seconds: int | None = None
     ) -> bool:
         """
         Track SQS queue depth and message age metrics.
@@ -536,7 +536,7 @@ class CloudWatchMetrics:
 
 
 # Global metrics instance (lazy-initialized)
-_metrics_instance: Optional[CloudWatchMetrics] = None
+_metrics_instance: CloudWatchMetrics | None = None
 
 
 def get_metrics_client(environment: str = "dev") -> CloudWatchMetrics:

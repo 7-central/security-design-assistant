@@ -6,7 +6,6 @@ Provides analysis and recommendations for breaking complex processing into steps
 import json
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class ProcessingStageAnalysis:
     max_duration: float
     min_duration: float
     success_rate: float
-    memory_usage_mb: Optional[int]
+    memory_usage_mb: int | None
     timeout_risk: str  # 'low', 'medium', 'high'
     complexity: str    # 'simple', 'moderate', 'complex'
 
@@ -76,7 +75,7 @@ class StepFunctionsAnalyzer:
             'evaluation': []
         }
 
-        stage_success_rates = {stage: {'success': 0, 'total': 0} for stage in stage_timings.keys()}
+        stage_success_rates = {stage: {'success': 0, 'total': 0} for stage in stage_timings}
 
         # Extract timing data from job history
         for job in job_history:

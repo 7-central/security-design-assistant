@@ -288,7 +288,7 @@ class TestFullPipelineWithJudge:
                 mock_save.return_value = None
 
                 # Process with Judge
-                result = await judge_agent.process({
+                await judge_agent.process({
                     "components": sample_components,
                     "excel_file": "/tmp/test.xlsx"
                 })

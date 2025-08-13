@@ -337,7 +337,7 @@ def format_timestamp(timestamp) -> str:
     if not timestamp:
         return None
 
-    if isinstance(timestamp, (int, float)):
+    if isinstance(timestamp, int | float):
         from datetime import datetime
         return datetime.fromtimestamp(timestamp, UTC).isoformat()
 

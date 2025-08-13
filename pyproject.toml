@@ -8,24 +8,8 @@ requires-python = "==3.11.*"
 line-length = 120
 target-version = "py311"
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF"]
-ignore = [
-    "E501",      # Line too long (handled by line-length)
-    "F841",      # Local variable assigned but never used (can fix incrementally)
-    "UP007",     # Use X | Y for type annotations (can fix incrementally)  
-    "N802",      # Function name should be lowercase (settings functions)
-    "N806",      # Variable in function should be lowercase (test mocks)
-    "N818",      # Exception name should end with Error (existing exceptions)
-    "SIM105",    # Use contextlib.suppress (can fix incrementally)
-    "SIM108",    # Use ternary operator (can fix incrementally) 
-    "SIM117",    # Use single with statement (can fix incrementally)
-    "SIM118",    # Use key in dict (can fix incrementally)
-    "B904",      # raise from err (can fix incrementally)
-    "B005",      # strip() with multi-char (can fix incrementally)
-    "B007",      # Loop control variable not used (can fix incrementally)
-    "UP038",     # isinstance with X | Y (can fix incrementally)
-    "RUF012",    # Mutable class attributes (can fix incrementally)
-    "C401"       # Unnecessary generator (can fix incrementally)
-]
+# All relaxed rules are now removed - full strict checking
+ignore = []
 fix = true
 
 [tool.ruff.per-file-ignores]
@@ -33,19 +17,97 @@ fix = true
 
 [tool.mypy]
 python_version = "3.11"
-# Temporarily relaxed mypy settings to get CI passing
-# Can be gradually re-enabled as we fix type issues
-warn_return_any = false
-warn_unused_configs = false
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-check_untyped_defs = false
-no_implicit_optional = false
-warn_redundant_casts = false
-warn_unused_ignores = false
-warn_no_return = false
-warn_unreachable = false
-strict_equality = false
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+# Temporary relaxations for complex modules requiring more work
+# TODO: Gradually remove these overrides as we fix type issues
+[[tool.mypy.overrides]]
+module = "src.lambda_functions.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.storage.aws_storage"  # 18 errors - complex boto3 types
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.api.routes"  # 15 errors - FastAPI complex types
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.agents.judge_agent_v2"  # 12 errors - complex Gemini API
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.agents.context_agent"  # 9 errors - docx library types
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.agents.context_agent_v2"  # 6 errors
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.agents.codegen_agent_v2"  # 4 errors
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.cloudwatch_metrics"  # 1 error - complex metrics
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.pdf_processor"  # 2 errors - PIL types
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.config.prompt_version_manager"  # 2 errors
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.validation_report_generator"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.usage_analysis"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.success_criteria_validator"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.step_functions_analysis"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.recommendations_engine"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.lambda_optimization"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.judge_feedback_analyzer"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.s3_batch_operations"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.retry_logic"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.utils.error_handlers"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"

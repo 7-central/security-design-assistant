@@ -19,7 +19,7 @@ class StorageManager:
         Returns:
             StorageInterface implementation (LocalStorage or AWSStorage)
         """
-        storage_mode = settings.STORAGE_MODE
+        storage_mode = settings.storage_mode
 
         if storage_mode == "local":
             logger.info("Using local file system storage")

@@ -389,7 +389,7 @@ class TestMetricsClientSingleton:
             import src.utils.cloudwatch_metrics
             src.utils.cloudwatch_metrics._metrics_instance = None
 
-            client = get_metrics_client()
+            get_metrics_client()
 
             mock_cwm.assert_called_with('dev')
 
@@ -403,7 +403,7 @@ class TestCostCalculations:
         expected_cost = GEMINI_FLASH_COST_PER_MILLION
 
         with patch('src.utils.cloudwatch_metrics.boto3.client'):
-            metrics_client = CloudWatchMetrics('test')
+            CloudWatchMetrics('test')
 
             # Calculate cost using the same logic as in the class
             calculated_cost = (total_tokens / 1_000_000) * GEMINI_FLASH_COST_PER_MILLION
@@ -417,7 +417,7 @@ class TestCostCalculations:
         expected_cost = GEMINI_PRO_COST_PER_MILLION
 
         with patch('src.utils.cloudwatch_metrics.boto3.client'):
-            metrics_client = CloudWatchMetrics('test')
+            CloudWatchMetrics('test')
 
             # Calculate cost using the same logic as in the class
             calculated_cost = (total_tokens / 1_000_000) * GEMINI_PRO_COST_PER_MILLION

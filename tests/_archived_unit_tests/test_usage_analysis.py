@@ -16,7 +16,7 @@ class TestUsageAnalyzer:
     @pytest.fixture
     def usage_analyzer(self):
         """Create UsageAnalyzer instance with mocked AWS clients."""
-        with patch('boto3.client') as mock_client:
+        with patch('boto3.client'):
             analyzer = UsageAnalyzer('test')
 
             # Mock CloudWatch responses

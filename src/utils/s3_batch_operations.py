@@ -6,7 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from botocore.exceptions import ClientError
 
@@ -19,9 +19,9 @@ class BatchOperation:
     operation_type: str  # 'get', 'put', 'delete', 'head'
     bucket: str
     key: str
-    data: Optional[bytes] = None
-    metadata: Optional[dict[str, Any]] = None
-    callback: Optional[callable] = None
+    data: bytes | None = None
+    metadata: dict[str, Any] | None = None
+    callback: callable | None = None
     priority: int = 0  # Higher number = higher priority
     timestamp: datetime = field(default_factory=datetime.now)
 

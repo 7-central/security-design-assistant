@@ -307,7 +307,7 @@ class ScheduleAgentV2(BaseAgentV2):
 
             # Generate content
             response = self.generate_content(
-                model_name=settings.GEMINI_MODEL,
+                model_name=settings.gemini_model,
                 contents=contents
             )
 

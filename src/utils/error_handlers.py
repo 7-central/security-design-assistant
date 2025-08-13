@@ -7,7 +7,7 @@ import json
 import logging
 import time
 import traceback
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from src.models.job import JobStatus
@@ -24,7 +24,7 @@ FALLBACK_LAMBDA_TIMEOUT_SECONDS = 900  # 15 minutes
 class LambdaError(Exception):
     """Base class for Lambda-specific errors."""
 
-    def __init__(self, message: str, error_code: str, details: Optional[dict[str, Any]] = None):
+    def __init__(self, message: str, error_code: str, details: dict[str, Any] | None = None):
         super().__init__(message)
         self.message = message
         self.error_code = error_code
@@ -36,7 +36,7 @@ class LambdaError(Exception):
 class TimeoutApproachingError(LambdaError):
     """Raised when Lambda timeout is approaching."""
 
-    def __init__(self, remaining_time: float, message: Optional[str] = None):
+    def __init__(self, remaining_time: float, message: str | None = None):
         super().__init__(
             message or f"Lambda timeout approaching, {remaining_time:.1f}s remaining",
             "LAMBDA_TIMEOUT_APPROACHING",
@@ -47,7 +47,7 @@ class TimeoutApproachingError(LambdaError):
 class MemoryExhaustedError(LambdaError):
     """Raised when Lambda memory is exhausted."""
 
-    def __init__(self, current_usage: Optional[int] = None, limit: Optional[int] = None):
+    def __init__(self, current_usage: int | None = None, limit: int | None = None):
         super().__init__(
             f"Lambda memory exhausted (usage: {current_usage}MB, limit: {limit}MB)",
             "LAMBDA_MEMORY_EXHAUSTED",
@@ -71,7 +71,7 @@ class ProcessingStageError(LambdaError):
         )
 
 
-def create_correlation_id(job_id: Optional[str] = None) -> str:
+def create_correlation_id(job_id: str | None = None) -> str:
     """
     Create a correlation ID for request tracing.
 
@@ -90,8 +90,8 @@ def create_correlation_id(job_id: Optional[str] = None) -> str:
 def log_structured_error(
     error: Exception,
     context: dict[str, Any],
-    correlation_id: Optional[str] = None,
-    job_id: Optional[str] = None
+    correlation_id: str | None = None,
+    job_id: str | None = None
 ) -> None:
     """
     Log error with structured format for CloudWatch analysis.
@@ -133,7 +133,7 @@ def check_lambda_timeout(
     context: Any,
     start_time: float,
     buffer_seconds: int = DEFAULT_LAMBDA_TIMEOUT_BUFFER_SECONDS,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> None:
     """
     Check if Lambda timeout is approaching and raise error if needed.
@@ -174,7 +174,7 @@ def check_lambda_timeout(
 
 def check_memory_usage(
     threshold_percent: float = DEFAULT_MEMORY_THRESHOLD_PERCENT,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> None:
     """
     Check Lambda memory usage and warn/error if threshold exceeded.
@@ -327,7 +327,7 @@ async def update_job_stage_status(
     stage_name: str,
     stage_status: str,
     correlation_id: str,
-    error: Optional[str] = None
+    error: str | None = None
 ) -> None:
     """
     Update job status with stage-based progress tracking.
@@ -386,9 +386,9 @@ async def update_job_stage_status(
 def create_api_error_response(
     status_code: int,
     message: str,
-    error_code: Optional[str] = None,
-    details: Optional[dict[str, Any]] = None,
-    correlation_id: Optional[str] = None
+    error_code: str | None = None,
+    details: dict[str, Any] | None = None,
+    correlation_id: str | None = None
 ) -> dict[str, Any]:
     """
     Create standardized API error response.
@@ -432,10 +432,10 @@ def create_api_error_response(
 def log_lambda_metrics(
     function_name: str,
     execution_time: float,
-    memory_used: Optional[int] = None,
+    memory_used: int | None = None,
     success: bool = True,
     error_count: int = 0,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> None:
     """
     Log Lambda execution metrics for CloudWatch analysis.
