@@ -262,8 +262,7 @@ class SuccessCriteriaValidator:
                             "priority": "critical",
                             "title": "Fix Processing Failures",
                             "description": (
-                                f"Processing failure rate of "
-                                f"{criterion['details']['failure_rate']:.1%} too high"
+                                f"Processing failure rate of " f"{criterion['details']['failure_rate']:.1%} too high"
                             ),
                             "actions": [
                                 "Add comprehensive error handling",
@@ -476,15 +475,11 @@ class SuccessCriteriaValidator:
 
         if status == "fail":
             failed_criteria = []
-            for _criterion_name, criterion in validation_results.get(
-                "individual_criteria", {}
-            ).items():
+            for _criterion_name, criterion in validation_results.get("individual_criteria", {}).items():
                 if not criterion.get("passed", True):
                     failed_criteria.append(
-
-                            f"  - {criterion['criterion']}: {criterion['actual_value']:.1%} "
-                            f"(target: {criterion['target_value']:.1%})"
-
+                        f"  - {criterion['criterion']}: {criterion['actual_value']:.1%} "
+                        f"(target: {criterion['target_value']:.1%})"
                     )
 
             if failed_criteria:

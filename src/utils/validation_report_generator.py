@@ -765,8 +765,8 @@ class ValidationReportGenerator:
             md_lines.append(f"- {rec}")
 
         # Add detailed sections - extract variables for readability
-        criteria_met = report['success_criteria_evaluation']['criteria_met']
-        actual_results = report['success_criteria_evaluation']['actual_results']
+        criteria_met = report["success_criteria_evaluation"]["criteria_met"]
+        actual_results = report["success_criteria_evaluation"]["actual_results"]
 
         md_lines.extend(
             [
