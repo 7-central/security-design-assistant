@@ -13,6 +13,7 @@ from src.agents.excel_generation_agent import ExcelGenerationAgent
 from src.agents.judge_agent_v2 import JudgeAgentV2
 from src.agents.schedule_agent_v2 import ScheduleAgentError, ScheduleAgentV2
 from src.api.models import (
+    DetailedHealthResponse,
     HealthResponse,
     ProcessDrawingResponse,
 )
@@ -40,6 +41,46 @@ storage: StorageInterface = StorageManager.get_storage()
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     return HealthResponse(status="healthy", version="1.0.0")
+
+
+@router.get("/health/detailed", response_model=DetailedHealthResponse)
+async def detailed_health_check() -> DetailedHealthResponse:
+    """
+    Comprehensive health check with detailed system information.
+    """
+    import os
+    from datetime import datetime
+    
+    # Get environment information
+    environment = os.getenv("ENV", "unknown")
+    storage_mode = os.getenv("STORAGE_MODE", "unknown")
+    
+    # Check dependencies
+    dependencies = {}
+    
+    # Check storage health
+    try:
+        if hasattr(storage, 'health_check'):
+            storage_health = await storage.health_check()
+            dependencies["storage"] = "healthy" if storage_health else "unhealthy"
+        else:
+            dependencies["storage"] = "healthy"  # Assume healthy if no health check method
+    except Exception as e:
+        dependencies["storage"] = f"error: {str(e)[:50]}"
+    
+    # Check Gemini API key presence
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    dependencies["gemini_api"] = "configured" if gemini_key else "not_configured"
+    
+    return DetailedHealthResponse(
+        status="healthy",
+        version="1.0.0",
+        environment=environment,
+        storage_mode=storage_mode,
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        uptime="unknown",  # Could implement actual uptime tracking
+        dependencies=dependencies
+    )
 
 
 @router.post(
