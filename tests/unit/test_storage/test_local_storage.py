@@ -13,17 +13,17 @@ def local_storage(temp_output_dir: Path) -> LocalStorage:
     from src.utils.env_cache import get_env_cache
     # Clear the environment cache to pick up the patched values
     get_env_cache().clear_cache()
-    
+
     # Ensure clean state - delete jobs.json if it exists
     jobs_file = temp_output_dir / "jobs.json"
     if jobs_file.exists():
         jobs_file.unlink()
-    
+
     storage = LocalStorage()
-    
+
     # Verify we're using the temp directory
     assert str(storage.base_path) == str(temp_output_dir)
-    
+
     return storage
 
 
@@ -74,7 +74,7 @@ class TestLocalStorage:
         # Check existing file
         exists = await local_storage.file_exists(key)
         assert exists is True
-        
+
         # Check non-existent file in same dir
         exists = await local_storage.file_exists("test/other.pdf")
         assert exists is False
@@ -136,10 +136,11 @@ class TestLocalStorage:
         assert local_storage.jobs_file.read_text() == "{}"
 
     def test_ensure_directories_permission_error(self) -> None:
-        from unittest.mock import patch
         import os
+        from unittest.mock import patch
+
         from src.utils.env_cache import get_env_cache
-        
+
         # Create a read-only directory
         with tempfile.TemporaryDirectory() as temp_dir:
             test_dir = Path(temp_dir) / "readonly"

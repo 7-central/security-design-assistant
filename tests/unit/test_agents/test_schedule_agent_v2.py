@@ -1,13 +1,11 @@
 """Unit tests for Schedule Agent V2."""
-import asyncio
 import json
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-import pytest
-from PIL import Image
+from unittest.mock import AsyncMock, Mock, patch
 
-from src.agents.schedule_agent_v2 import ScheduleAgentV2, ScheduleAgentError
+import pytest
+
+from src.agents.schedule_agent_v2 import ScheduleAgentV2
 from src.models.component import Component, ComponentExtractionResult, PageComponents
 from src.models.job import Job, JobStatus
 from src.storage.local_storage import LocalStorage
@@ -129,7 +127,7 @@ class TestScheduleAgentV2:
 
     def test_component_extraction_result(self):
         """Test ComponentExtractionResult model."""
-        
+
         pages = [
             PageComponents(
                 page_num=1,
@@ -144,7 +142,7 @@ class TestScheduleAgentV2:
                 ]
             )
         ]
-        
+
         result = ComponentExtractionResult(pages=pages)
         assert result.total_components == 1
         assert len(result.pages) == 1
@@ -170,14 +168,14 @@ class TestScheduleAgentV2:
                 }
             ]
         }
-        
+
         filtered = schedule_agent_v2.filter_relevant_context(context_data)
-        
+
         # Relevant sections should be included
         assert "Type 11" in filtered
         assert "P-type" in filtered
         assert "Project specifications:" in filtered
-        
+
         # Non-relevant section should be excluded
         assert "1990" not in filtered
         assert "renovated" not in filtered
@@ -186,10 +184,10 @@ class TestScheduleAgentV2:
         """Test context filtering with empty input."""
         # Test with None
         assert schedule_agent_v2.filter_relevant_context(None) == ""
-        
+
         # Test with empty dict
         assert schedule_agent_v2.filter_relevant_context({}) == ""
-        
+
         # Test with missing sections
         assert schedule_agent_v2.filter_relevant_context({"other": "data"}) == ""
 
@@ -205,10 +203,10 @@ class TestScheduleAgentV2:
                 for i in range(10)
             ]
         }
-        
+
         # Filter with small limit
         filtered = schedule_agent_v2.filter_relevant_context(large_context, max_tokens=100)
-        
+
         # Should be limited in size
         assert len(filtered) < 1000  # Much smaller than full content
 
@@ -228,9 +226,9 @@ class TestScheduleAgentV2:
                 }
             ]
         }
-        
+
         filtered = schedule_agent_v2.filter_relevant_context(context, max_tokens=50)
-        
+
         # Specification should be prioritized
         assert "Door Specs" in filtered or "lock type" in filtered
 
@@ -238,9 +236,9 @@ class TestScheduleAgentV2:
         """Test prompt building with context."""
         context_section = "Project specifications:\nType 11 locks"
         page_data = {"content": "Page text"}
-        
+
         contents = schedule_agent_v2._build_page_content(page_data, 1, 10, context_section)
-        
+
         # First item should be the formatted prompt
         assert len(contents) > 0
         prompt = contents[0]
@@ -249,9 +247,9 @@ class TestScheduleAgentV2:
     def test_prompt_without_context(self, schedule_agent_v2):
         """Test prompt building without context."""
         page_data = {"content": "Page text"}
-        
+
         contents = schedule_agent_v2._build_page_content(page_data, 1, 10, "")
-        
+
         # Should still build valid prompt
         assert len(contents) > 0
         # No context should be present
@@ -268,14 +266,14 @@ class TestScheduleAgentV2:
         }
         # Use AsyncMock to return the value properly
         schedule_agent_v2.storage.get_file = AsyncMock(return_value=json.dumps(sample_context))
-        
+
         # Mock extract_components to prevent full execution
         with patch.object(schedule_agent_v2, '_extract_components', new=AsyncMock()) as mock_extract:
             mock_extract.return_value = ComponentExtractionResult(pages=[])
-            
+
             # Execute
             await schedule_agent_v2.process({"pages": [{"pdf_path": "/tmp/test.pdf"}]})
-            
+
             # Verify context loading was attempted with the correct path
             expected_path = f"7central/{sample_job.client_name}/{sample_job.job_id}/checkpoint_context_v1.json"
             schedule_agent_v2.storage.get_file.assert_called_once_with(expected_path)
@@ -285,13 +283,13 @@ class TestScheduleAgentV2:
         """Test that process continues when context is unavailable."""
         # Mock context loading failure
         schedule_agent_v2.storage.get_file.side_effect = Exception("Not found")
-        
+
         # Mock extract_components
         with patch.object(schedule_agent_v2, '_extract_components') as mock_extract:
             mock_extract.return_value = ComponentExtractionResult(pages=[])
-            
+
             # Should not fail
             result = await schedule_agent_v2.process({"pages": [{"pdf_path": "/tmp/test.pdf"}]})
-            
+
             assert result is not None
             assert "components" in result
