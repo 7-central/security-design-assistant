@@ -230,7 +230,10 @@ async def process_drawing(
 
             # Process with Schedule Agent
             # Note: Context is loaded from checkpoint by the agent internally
-            schedule_input = {"pages": processing_results["pages"]}
+            schedule_input = {
+                "pages": processing_results["pages"],
+                "pdf_path": str(tmp_file_path) if tmp_file_path.exists() else None
+            }
 
             agent_result = await schedule_agent.process(schedule_input)
 

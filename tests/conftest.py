@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from moto import mock_dynamodb, mock_s3, mock_sqs
 
 from src.api.main import app
-from src.config.settings import settings
 
 
 @pytest.fixture

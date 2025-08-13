@@ -60,7 +60,13 @@ jobs:
           LOCAL_OUTPUT_DIR: ./local_output
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          pytest tests/unit -v -m unit --cov=src --cov-report=term-missing
+          # Debug: Show current directory and list test files
+          pwd
+          ls -la tests/unit/
+          # Run pytest with more verbose collection info
+          python -m pytest tests/unit -v -m unit --cov=src --cov-report=term-missing --co -q || true
+          # Actually run the tests
+          python -m pytest tests/unit -v -m unit --cov=src --cov-report=term-missing
       
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
@@ -86,11 +92,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
       - name: Run E2E tests
         env:
-          STORAGE_MODE: local
+          STORAGE_MODE: aws
           ENV: dev
-          LOCAL_OUTPUT_DIR: ./local_output
+          AWS_REGION: ${{ env.AWS_REGION }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           pytest tests/e2e -v -m e2e --tb=short
