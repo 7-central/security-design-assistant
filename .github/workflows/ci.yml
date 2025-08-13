@@ -71,7 +71,7 @@ jobs:
   e2e-tests:
     name: E2E Tests (Dev Environment)
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests]
+    needs: [unit-tests]  # Only depend on unit tests, not lint
     
     steps:
       - uses: actions/checkout@v4
