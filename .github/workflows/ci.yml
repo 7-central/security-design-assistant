@@ -60,12 +60,15 @@ jobs:
           LOCAL_OUTPUT_DIR: ./local_output
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Debug: Show current directory and list test files
-          pwd
-          ls -la tests/unit/
-          # Run pytest with more verbose collection info
-          python -m pytest tests/unit -v -m unit --cov=src --cov-report=term-missing --co -q || true
-          # Actually run the tests
+          # Debug: Check if test files exist and are readable
+          echo "=== Checking test files ==="
+          find tests/unit -name "test_*.py" -type f | head -10
+          echo "=== Checking for pytest markers ==="
+          grep -r "@pytest.mark.unit" tests/unit/ | head -5 || echo "No markers found"
+          echo "=== Running pytest ==="
+          # Try running without the marker first to see if any tests are collected
+          python -m pytest tests/unit --co -q | head -20 || true
+          # Now run with the marker
           python -m pytest tests/unit -v -m unit --cov=src --cov-report=term-missing
       
       - name: Upload coverage reports
