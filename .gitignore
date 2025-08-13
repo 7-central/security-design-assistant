@@ -212,7 +212,8 @@ test-sam-app/
 
 # Test output files
 output/
-test_*.py
+/test_*.py  # Ignore test files in root directory only
+# Test files in tests/ directory should be in version control
 test_*.xlsx
 *.test
 api-examples
