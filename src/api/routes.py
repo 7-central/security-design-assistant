@@ -18,7 +18,6 @@ from src.api.models import (
 )
 from src.models.job import Job, JobStatus
 from src.storage.interface import StorageInterface
-from src.storage.local_storage import LocalStorage
 from src.utils.id_generator import generate_job_id
 from src.utils.pdf_processor import (
     CorruptedPDFError,
@@ -26,6 +25,7 @@ from src.utils.pdf_processor import (
     PasswordProtectedPDFError,
     PDFProcessor,
 )
+from src.utils.storage_manager import StorageManager
 from src.utils.validators import classify_context, validate_file_size, validate_pdf_file
 
 router = APIRouter()
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB in bytes
 
-# Initialize storage
-storage: StorageInterface = LocalStorage()
+# Initialize storage using StorageManager based on environment
+storage: StorageInterface = StorageManager.get_storage()
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -230,7 +230,10 @@ async def process_drawing(
 
             # Process with Schedule Agent
             # Note: Context is loaded from checkpoint by the agent internally
-            schedule_input = {"pages": processing_results["pages"]}
+            schedule_input = {
+                "pages": processing_results["pages"],
+                "pdf_path": str(tmp_file_path) if tmp_file_path.exists() else None
+            }
 
             agent_result = await schedule_agent.process(schedule_input)
 

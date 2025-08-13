@@ -234,7 +234,7 @@ Write and execute the Python code to generate this Excel file."""
             response: API response
         """
         input_tokens = self.estimate_tokens(prompt)
-        
+
         # Handle code execution responses differently
         output_text = ""
         try:
@@ -247,7 +247,7 @@ Write and execute the Python code to generate this Excel file."""
                         output_text += str(part.code_execution_result.output)
                     elif hasattr(part, 'text'):
                         output_text += str(part.text)
-            
+
             # Only try to access response.text if there are no code execution parts
             if not output_text and hasattr(response, 'text'):
                 try:
@@ -257,7 +257,7 @@ Write and execute the Python code to generate this Excel file."""
         except Exception as e:
             logger.debug(f"Could not extract text for cost tracking: {e}")
             output_text = ""
-        
+
         output_tokens = self.estimate_tokens(output_text)
 
         input_cost = (input_tokens / 1_000_000) * self.cost_per_million_input
@@ -283,7 +283,7 @@ Write and execute the Python code to generate this Excel file."""
             if not isinstance(components, list):
                 logger.error(f"Expected list of components, got {type(components).__name__}")
                 return None
-                
+
             mappable_components = []
             unmappable_components = []
 

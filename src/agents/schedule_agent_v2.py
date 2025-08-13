@@ -42,7 +42,7 @@ class ScheduleAgentV2(BaseAgentV2):
             from src.config.prompt_version_manager import PromptVersionManager
             manager = PromptVersionManager()
             return manager.load_prompt(self.prompt_version)
-        
+
         # Otherwise load the current/default prompt
         prompt_path = Path(__file__).parent.parent / "config" / "prompts" / "schedule_prompt.txt"
         try:

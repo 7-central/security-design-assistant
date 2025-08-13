@@ -279,10 +279,22 @@ Provide your evaluation in the following JSON format:
     async def _generate_with_files(self, prompt: str, files: list[genai.types.File]) -> str:
         """Generate response with uploaded files."""
         try:
-            response = await self.client.models.generate_content(
+            # Convert File objects to proper Part format (like Schedule Agent does)
+            from google.genai import types
+            file_parts = []
+            for file in files:
+                file_part = types.Part(
+                    file_data=types.FileData(
+                        file_uri=file.uri,
+                        mime_type=file.mime_type or "application/pdf"
+                    )
+                )
+                file_parts.append(file_part)
+
+            response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[
-                    *files,  # Include uploaded files
+                    *file_parts,  # Include uploaded files as Parts
                     prompt
                 ],
                 config=genai.types.GenerateContentConfig(
@@ -291,7 +303,11 @@ Provide your evaluation in the following JSON format:
                     max_output_tokens=4096
                 )
             )
-            return response.text
+            # Ensure we return text, not the response object
+            if hasattr(response, 'text'):
+                return response.text
+            else:
+                return str(response)
         except Exception as e:
             self.log_structured("error", f"Generation with files failed: {e}")
             raise

@@ -15,7 +15,7 @@ Monorepo structure to keep all components (API, queue workers, agents, utilities
 - All outputs saved to S3/storage with pre-signed URLs returned
 
 ## Testing Requirements
-**Comprehensive Testing with AI Judge** - Unit tests for utilities, integration tests for agent pipeline, and AI-based accuracy testing using an AI judge to compare outputs against baseline schedules. Focus on consistency testing (same drawing 10x) and variation testing (10 drawing variations).
+**Pragmatic Testing with Real Validation** - Unit tests for core utilities, real E2E tests with actual API calls for pipeline validation. Focus on consistency testing (same drawing 3x) and critical path validation with real-world feedback.
 
 ## Additional Technical Assumptions and Requests
 

@@ -107,19 +107,19 @@
 
 **Acceptance Criteria:**
 1. AWS account configuration completed:
-   - New AWS CLI profile `design-lee` created with access to existing AWS account
-   - IAM user/role created for deployments with appropriate permissions
-   - S3 deployment bucket created for SAM artifacts
-   - Cost tracking tags configured for the project
+   - AWS CLI profile `design-lee` created using existing `lee-hayton` IAM user (Account: 445567098699, Region: eu-west-2)
+   - AWS CLI profile `design` created using existing `7c-IAM-Admin-User` for CI/CD deployments
+   - S3 deployment bucket `security-assistant-sam-deployments` created in eu-west-2
+   - Cost tracking tags configured with Project=SecurityDesignAssistant
 2. GitHub repository structure established:
-   - Investigate Ric's GitHub account for optimal organization structure
-   - Create 7Central organization or use existing structure
-   - Create design-assistant repository with proper settings
-   - Configure repository access for development workflow
+   - 7-central GitHub account created (info@7central.co.uk)
+   - Repository created: https://github.com/7-central/security-design-assistant
+   - Repository configured with main/develop branches and proper settings
+   - Lee uses junksamiad account locally with collaborator push access
 3. Local development workflow configured:
-   - Lee's local git configured to push to Ric's repository
-   - AWS CLI profile `design-lee` working locally
-   - Test deployment permissions with simple SAM app
+   - Local git configured to push to 7-central/security-design-assistant repository
+   - AWS CLI profiles `design-lee` and `design` working locally
+   - SAM deployment tested successfully with security-assistant-sam-deployments bucket
 4. Documentation created:
    - AWS account setup documented
    - GitHub repository structure documented

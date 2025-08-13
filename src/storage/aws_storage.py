@@ -1,10 +1,11 @@
-import json
 import logging
 import os
 import time
+from decimal import Decimal
 from typing import Any
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from src.storage.interface import StorageInterface
@@ -16,13 +17,29 @@ class AWSStorage(StorageInterface):
     """AWS S3 and DynamoDB implementation of storage interface."""
 
     def __init__(self):
-        """Initialize AWS storage with S3 and DynamoDB clients."""
-        self.s3_client = boto3.client('s3')
-        self.dynamodb = boto3.resource('dynamodb')
-        
+        """Initialize AWS storage with S3 and DynamoDB clients with connection pooling."""
+        # Configure connection pooling for better performance
+        config = Config(
+            max_pool_connections=50,  # Increase connection pool size
+            retries={
+                'max_attempts': 3,
+                'mode': 'adaptive'  # Use adaptive retry mode
+            }
+        )
+
+        self.s3_client = boto3.client('s3', config=config)
+        self.dynamodb = boto3.resource('dynamodb', config=config)
+
+        # S3 metadata cache for performance optimization
+        self._metadata_cache = {}
+        self._cache_ttl = 300  # 5 minutes cache TTL
+
+        # S3 batch processor for request consolidation
+        self._batch_processor = None
+
         self.s3_bucket = os.getenv('S3_BUCKET', 'security-assistant-files')
         self.dynamodb_table_name = os.getenv('DYNAMODB_TABLE', 'security-assistant-jobs')
-        
+
         # Initialize DynamoDB table reference
         try:
             self.jobs_table = self.dynamodb.Table(self.dynamodb_table_name)
@@ -47,12 +64,19 @@ class AWSStorage(StorageInterface):
             if metadata:
                 extra_args['Metadata'] = {k: str(v) for k, v in metadata.items()}
 
+            # Use Intelligent Tiering for cost optimization
+            extra_args['StorageClass'] = 'INTELLIGENT_TIERING'
+
             self.s3_client.put_object(
                 Bucket=self.s3_bucket,
                 Key=key,
                 Body=content,
                 **extra_args
             )
+
+            # Cache metadata for performance
+            if metadata:
+                self._cache_metadata(key, metadata)
 
             logger.info(f"Successfully uploaded file to S3: s3://{self.s3_bucket}/{key}")
             return f"s3://{self.s3_bucket}/{key}"
@@ -130,6 +154,23 @@ class AWSStorage(StorageInterface):
             logger.error(f"Failed to delete file from S3: {e}")
             raise
 
+    def _convert_floats_to_decimal(self, obj: Any) -> Any:
+        """Convert floats to Decimal for DynamoDB compatibility.
+
+        Args:
+            obj: Object to convert
+
+        Returns:
+            Object with floats converted to Decimal
+        """
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {k: self._convert_floats_to_decimal(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_floats_to_decimal(v) for v in obj]
+        return obj
+
     async def save_job_status(self, job_id: str, status_data: dict[str, Any]) -> None:
         """
         Save job status to DynamoDB.
@@ -141,7 +182,7 @@ class AWSStorage(StorageInterface):
         try:
             # Create the composite key for the job
             company_client_job = status_data.get('company_client_job', f"7central#unknown#{job_id}")
-            
+
             # Prepare the item for DynamoDB
             item = {
                 'company#client#job': company_client_job,
@@ -149,11 +190,14 @@ class AWSStorage(StorageInterface):
                 'updated_at': int(time.time()),
                 **status_data
             }
-            
+
+            # Convert floats to Decimal for DynamoDB compatibility
+            item = self._convert_floats_to_decimal(item)
+
             # Set TTL for 30 days (30 * 24 * 60 * 60 seconds)
             if 'ttl' not in item:
                 item['ttl'] = int(time.time()) + (30 * 24 * 60 * 60)
-            
+
             # Create date bucket for GSI3 (YYYY-MM format)
             if 'created_at' in status_data:
                 created_timestamp = status_data['created_at']
@@ -190,11 +234,11 @@ class AWSStorage(StorageInterface):
                 FilterExpression=boto3.dynamodb.conditions.Attr('job_id').eq(job_id),
                 Limit=1
             )
-            
+
             items = response.get('Items', [])
             if not items:
                 return None
-                
+
             item = items[0]
             logger.info(f"Successfully retrieved job status from DynamoDB: {job_id}")
             return dict(item)
@@ -217,7 +261,7 @@ class AWSStorage(StorageInterface):
             response = self.jobs_table.get_item(
                 Key={'company#client#job': company_client_job}
             )
-            
+
             item = response.get('Item')
             if item:
                 logger.info(f"Successfully retrieved job by composite key: {company_client_job}")
@@ -270,7 +314,7 @@ class AWSStorage(StorageInterface):
                 ScanIndexForward=False,  # Sort by created_at descending
                 Limit=limit
             )
-            
+
             items = response.get('Items', [])
             logger.info(f"Retrieved {len(items)} jobs with status: {status}")
             return [dict(item) for item in items]
@@ -297,7 +341,7 @@ class AWSStorage(StorageInterface):
                 ScanIndexForward=False,  # Sort by created_at descending
                 Limit=limit
             )
-            
+
             items = response.get('Items', [])
             logger.info(f"Retrieved {len(items)} jobs for client: {client_name}")
             return [dict(item) for item in items]
@@ -324,7 +368,7 @@ class AWSStorage(StorageInterface):
                 ScanIndexForward=False,  # Sort by created_at descending
                 Limit=limit
             )
-            
+
             items = response.get('Items', [])
             logger.info(f"Retrieved {len(items)} jobs for date bucket: {date_bucket}")
             return [dict(item) for item in items]
@@ -334,8 +378,8 @@ class AWSStorage(StorageInterface):
             raise
 
     async def update_job_stage_progress(
-        self, 
-        job_id: str, 
+        self,
+        job_id: str,
         current_stage: str,
         stages_completed: list[str],
         additional_data: dict[str, Any] | None = None
@@ -439,7 +483,7 @@ class AWSStorage(StorageInterface):
         """
         try:
             cutoff_time = int(time.time()) - (days_old * 24 * 60 * 60)
-            
+
             # Query jobs older than cutoff time
             response = self.jobs_table.scan(
                 FilterExpression=boto3.dynamodb.conditions.Attr('created_at').lt(cutoff_time),
@@ -466,3 +510,198 @@ class AWSStorage(StorageInterface):
         except Exception as e:
             logger.error(f"Failed to cleanup expired jobs: {e}")
             raise
+
+    def _cache_metadata(self, key: str, metadata: dict[str, Any]) -> None:
+        """Cache S3 object metadata for performance optimization.
+
+        Args:
+            key: S3 object key
+            metadata: Metadata to cache
+        """
+        cache_entry = {
+            'metadata': metadata,
+            'timestamp': time.time(),
+            'key': key
+        }
+        self._metadata_cache[key] = cache_entry
+        logger.debug(f"Cached metadata for S3 object: {key}")
+
+    def _get_cached_metadata(self, key: str) -> dict[str, Any] | None:
+        """Retrieve cached metadata if available and not expired.
+
+        Args:
+            key: S3 object key
+
+        Returns:
+            Cached metadata if available, None otherwise
+        """
+        if key not in self._metadata_cache:
+            return None
+
+        cache_entry = self._metadata_cache[key]
+        cache_age = time.time() - cache_entry['timestamp']
+
+        if cache_age > self._cache_ttl:
+            # Cache expired, remove it
+            del self._metadata_cache[key]
+            logger.debug(f"Cache expired for S3 object: {key}")
+            return None
+
+        logger.debug(f"Cache hit for S3 object metadata: {key}")
+        return cache_entry['metadata']
+
+    async def get_object_metadata(self, key: str, use_cache: bool = True) -> dict[str, Any] | None:
+        """Get S3 object metadata with optional caching.
+
+        Args:
+            key: S3 object key
+            use_cache: Whether to use cached metadata
+
+        Returns:
+            Object metadata if available, None otherwise
+        """
+        # Check cache first if enabled
+        if use_cache:
+            cached_metadata = self._get_cached_metadata(key)
+            if cached_metadata is not None:
+                return cached_metadata
+
+        try:
+            response = self.s3_client.head_object(
+                Bucket=self.s3_bucket,
+                Key=key
+            )
+
+            metadata = {
+                'content_length': response['ContentLength'],
+                'last_modified': response['LastModified'],
+                'etag': response['ETag'],
+                'content_type': response.get('ContentType', 'application/octet-stream'),
+                'metadata': response.get('Metadata', {}),
+                'storage_class': response.get('StorageClass', 'STANDARD')
+            }
+
+            # Cache the metadata
+            if use_cache:
+                self._cache_metadata(key, metadata)
+
+            logger.info(f"Retrieved metadata for S3 object: {key}")
+            return metadata
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                logger.warning(f"S3 object not found: {key}")
+                return None
+            logger.error(f"Failed to get S3 object metadata: {e}")
+            raise
+
+    def clear_metadata_cache(self) -> None:
+        """Clear the metadata cache."""
+        self._metadata_cache.clear()
+        logger.info("S3 metadata cache cleared")
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """Get cache statistics for monitoring.
+
+        Returns:
+            Cache statistics
+        """
+        current_time = time.time()
+        active_entries = 0
+        expired_entries = 0
+
+        for cache_entry in self._metadata_cache.values():
+            cache_age = current_time - cache_entry['timestamp']
+            if cache_age <= self._cache_ttl:
+                active_entries += 1
+            else:
+                expired_entries += 1
+
+        return {
+            'total_entries': len(self._metadata_cache),
+            'active_entries': active_entries,
+            'expired_entries': expired_entries,
+            'cache_ttl_seconds': self._cache_ttl
+        }
+
+    def _get_batch_processor(self):
+        """Get or create S3 batch processor for request consolidation."""
+        if self._batch_processor is None:
+            from src.utils.s3_batch_operations import S3BatchProcessor
+            self._batch_processor = S3BatchProcessor(
+                self.s3_client,
+                batch_size=15,  # Optimize batch size for Lambda
+                flush_interval=2.0  # Shorter interval for Lambda execution
+            )
+        return self._batch_processor
+
+    async def batch_check_files_exist(self, keys: list[str]) -> dict[str, bool]:
+        """Check if multiple files exist using batch operations for cost optimization.
+
+        Args:
+            keys: List of S3 object keys to check
+
+        Returns:
+            Dictionary mapping keys to existence status
+        """
+        from src.utils.s3_batch_operations import batch_check_objects_exist
+
+        try:
+            existence_map = await batch_check_objects_exist(
+                self.s3_client,
+                self.s3_bucket,
+                keys,
+                batch_size=20  # Higher batch size for HEAD operations
+            )
+
+            logger.info(f"Batch checked existence of {len(keys)} files")
+            return existence_map
+
+        except Exception as e:
+            logger.error(f"Failed to batch check file existence: {e}")
+            raise
+
+    async def batch_get_files(self, keys: list[str]) -> list[dict[str, Any]]:
+        """Get multiple files using batch operations for cost optimization.
+
+        Args:
+            keys: List of S3 object keys to retrieve
+
+        Returns:
+            List of file retrieval results
+        """
+        from src.utils.s3_batch_operations import batch_get_objects
+
+        try:
+            results = await batch_get_objects(
+                self.s3_client,
+                self.s3_bucket,
+                keys,
+                batch_size=10  # Conservative batch size for GET operations
+            )
+
+            logger.info(f"Batch retrieved {len(keys)} files")
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to batch get files: {e}")
+            raise
+
+    async def get_batch_stats(self) -> dict[str, Any]:
+        """Get S3 batch operation statistics.
+
+        Returns:
+            Batch operation statistics
+        """
+        if self._batch_processor is None:
+            return {
+                'batch_processor_initialized': False,
+                'total_operations': 0,
+                'batches_processed': 0,
+                'api_calls_saved': 0,
+                'efficiency_percent': 0
+            }
+
+        stats = self._batch_processor.get_stats()
+        stats['batch_processor_initialized'] = True
+        return stats

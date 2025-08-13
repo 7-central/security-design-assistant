@@ -1,13 +1,11 @@
-"""Base Agent V2 with Google GenAI SDK."""
+"""Base Agent V2 with Google GenAI SDK and lazy loading optimization."""
 import json
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Optional
 
-from google import genai
-from google.genai import types
-
+# Lazy loading imports - only import when needed
 from src.config.settings import settings
 from src.storage.interface import StorageInterface
 
@@ -27,10 +25,17 @@ class BaseAgentV2(ABC):
         self.storage = storage
         self.job = job
         self.agent_name = self.__class__.__name__
-        self.client = self._initialize_client()
+        self._client = None  # Lazy load client only when needed
 
-    def _initialize_client(self) -> genai.Client:
-        """Initialize the Google GenAI client.
+    @property
+    def client(self):
+        """Lazy-loaded GenAI client."""
+        if self._client is None:
+            self._client = self._initialize_client()
+        return self._client
+
+    def _initialize_client(self):
+        """Initialize the Google GenAI client with lazy loading.
 
         Returns:
             Configured GenAI client
@@ -38,6 +43,9 @@ class BaseAgentV2(ABC):
         Raises:
             ValueError: If GEMINI_API_KEY is not set
         """
+        # Import only when needed to reduce cold start time
+        from google import genai
+
         if not settings.GEMINI_API_KEY:
             raise ValueError(
                 "GEMINI_API_KEY environment variable is required. "
@@ -112,7 +120,7 @@ class BaseAgentV2(ABC):
 
         return None
 
-    def upload_file(self, file_path: str) -> types.File:
+    def upload_file(self, file_path: str):
         """Upload a file to Google GenAI for processing.
 
         Args:
@@ -123,7 +131,6 @@ class BaseAgentV2(ABC):
         """
         logger.info(f"Uploading file: {file_path}")
         # Use pathlib.Path for better compatibility
-        from pathlib import Path
         uploaded_file = self.client.files.upload(path=str(file_path))
         logger.info(f"File uploaded successfully: {uploaded_file.name}")
         return uploaded_file
@@ -133,7 +140,7 @@ class BaseAgentV2(ABC):
         model_name: str,
         contents: list[Any],
         generation_config: Optional[dict[str, Any]] = None
-    ) -> types.GenerateContentResponse:
+    ):
         """Generate content using the specified model.
 
         Args:
@@ -150,6 +157,9 @@ class BaseAgentV2(ABC):
             "max_output_tokens": 8192,
         }
 
+        # Import types locally to avoid scope issues
+        from google.genai import types
+
         response = self.client.models.generate_content(
             model=model_name,
             contents=contents,
@@ -159,29 +169,29 @@ class BaseAgentV2(ABC):
         return response
 
     async def _generate_with_retry(
-        self, 
+        self,
         prompt: str | list[Any],
         model_name: Optional[str] = None
-    ) -> types.GenerateContentResponse:
+    ):
         """Generate content with retry logic (compatibility method).
-        
+
         Args:
             prompt: Text prompt or list of content parts
             model_name: Optional model name override
-            
+
         Returns:
             Generated content response
         """
         # Use default model if not specified
         if model_name is None:
             model_name = settings.GEMINI_MODEL
-            
+
         # If prompt is a string, wrap it in proper format
         if isinstance(prompt, str):
             contents = [prompt]
         else:
             contents = prompt
-            
+
         # The GenAI SDK has built-in retry logic
         return self.generate_content(
             model_name=model_name,
