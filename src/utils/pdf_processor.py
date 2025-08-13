@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class PDFType(Enum):
     """PDF document type classification."""
+
     GENUINE = "genuine"
     SCANNED = "scanned"
 
@@ -21,6 +22,7 @@ class PDFType(Enum):
 @dataclass
 class PageDimensions:
     """Page dimensions in millimeters."""
+
     width: float
     height: float
 
@@ -32,6 +34,7 @@ class PageDimensions:
 @dataclass
 class PageContent:
     """Content extracted from a PDF page."""
+
     page_num: int
     text: str | None = None
     image: Image.Image | None = None
@@ -50,6 +53,7 @@ class PageContent:
 @dataclass
 class PDFMetadata:
     """PDF document metadata."""
+
     pdf_type: PDFType
     total_pages: int
     dimensions: list[PageDimensions]
@@ -59,27 +63,31 @@ class PDFMetadata:
         return {
             "type": self.pdf_type.value,
             "pages": self.total_pages,
-            "dimensions": [dim.to_dict() for dim in self.dimensions]
+            "dimensions": [dim.to_dict() for dim in self.dimensions],
         }
 
 
 class PDFProcessingError(Exception):
     """Base exception for PDF processing errors."""
+
     pass
 
 
 class CorruptedPDFError(PDFProcessingError):
     """Raised when PDF file is corrupted."""
+
     pass
 
 
 class PasswordProtectedPDFError(PDFProcessingError):
     """Raised when PDF is password protected."""
+
     pass
 
 
 class MissingDependencyError(PDFProcessingError):
     """Raised when required system dependency is missing."""
+
     pass
 
 
@@ -92,7 +100,7 @@ class PDFProcessor:
         "A1": (594, 841),
         "A2": (420, 594),
         "A3": (297, 420),
-        "A4": (210, 297)
+        "A4": (210, 297),
     }
 
     # Points to mm conversion factor
@@ -124,7 +132,7 @@ class PDFProcessor:
         pdf_path = Path(pdf_path)
 
         try:
-            with open(pdf_path, 'rb') as pdf_file:
+            with open(pdf_path, "rb") as pdf_file:
                 reader = pypdf.PdfReader(pdf_file)
 
                 # Check if encrypted
@@ -189,12 +197,10 @@ class PDFProcessor:
         # Check both portrait and landscape orientations
         for size_name, (std_width, std_height) in self.STANDARD_SIZES.items():
             # Portrait orientation
-            if (abs(dimensions.width - std_width) <= tolerance and
-                abs(dimensions.height - std_height) <= tolerance):
+            if abs(dimensions.width - std_width) <= tolerance and abs(dimensions.height - std_height) <= tolerance:
                 return size_name
             # Landscape orientation
-            if (abs(dimensions.width - std_height) <= tolerance and
-                abs(dimensions.height - std_width) <= tolerance):
+            if abs(dimensions.width - std_height) <= tolerance and abs(dimensions.height - std_width) <= tolerance:
                 return f"{size_name} (landscape)"
 
         return None
@@ -215,7 +221,7 @@ class PDFProcessor:
         pages = []
 
         try:
-            with open(pdf_path, 'rb') as pdf_file:
+            with open(pdf_path, "rb") as pdf_file:
                 reader = pypdf.PdfReader(pdf_file)
 
                 for page_num, page in enumerate(reader.pages, 1):
@@ -228,11 +234,7 @@ class PDFProcessor:
                     height_pt = float(mediabox.height)
                     dimensions = self._points_to_dimensions(width_pt, height_pt)
 
-                    pages.append(PageContent(
-                        page_num=page_num,
-                        text=text,
-                        dimensions=dimensions
-                    ))
+                    pages.append(PageContent(page_num=page_num, text=text, dimensions=dimensions))
 
                     logger.info(f"Extracted text from page {page_num}, dimensions: {dimensions}")
 
@@ -263,7 +265,7 @@ class PDFProcessor:
 
         try:
             # Get total page count first
-            with open(pdf_path, 'rb') as pdf_file:
+            with open(pdf_path, "rb") as pdf_file:
                 reader = pypdf.PdfReader(pdf_file)
                 total_pages = len(reader.pages)
 
@@ -276,7 +278,7 @@ class PDFProcessor:
                     str(pdf_path),
                     dpi=self.dpi,
                     first_page=batch_start + 1,  # pdf2image uses 1-based indexing
-                    last_page=batch_end
+                    last_page=batch_end,
                 )
 
                 for idx, image in enumerate(images):
@@ -286,16 +288,9 @@ class PDFProcessor:
                     pixels_per_mm = self.dpi / 25.4
                     width_mm = image.width / pixels_per_mm
                     height_mm = image.height / pixels_per_mm
-                    dimensions = PageDimensions(
-                        width=round(width_mm, 2),
-                        height=round(height_mm, 2)
-                    )
+                    dimensions = PageDimensions(width=round(width_mm, 2), height=round(height_mm, 2))
 
-                    pages.append(PageContent(
-                        page_num=page_num,
-                        image=image,
-                        dimensions=dimensions
-                    ))
+                    pages.append(PageContent(page_num=page_num, image=image, dimensions=dimensions))
 
                     logger.info(f"Converted page {page_num} to image, dimensions: {dimensions}")
 
@@ -337,7 +332,7 @@ class PDFProcessor:
         pdf_type = self.detect_pdf_type(pdf_path)
 
         try:
-            with open(pdf_path, 'rb') as pdf_file:
+            with open(pdf_path, "rb") as pdf_file:
                 reader = pypdf.PdfReader(pdf_file)
                 total_pages = len(reader.pages)
 
@@ -356,11 +351,7 @@ class PDFProcessor:
                     if std_size:
                         standard_sizes.append(f"Page {page_num}: {std_size}")
 
-                metadata = PDFMetadata(
-                    pdf_type=pdf_type,
-                    total_pages=total_pages,
-                    dimensions=dimensions
-                )
+                metadata = PDFMetadata(pdf_type=pdf_type, total_pages=total_pages, dimensions=dimensions)
 
                 logger.info(f"PDF metadata: {metadata.to_dict()}")
                 if standard_sizes:

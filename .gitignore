@@ -1,6 +1,9 @@
 # Custom ignore
 .ignore/
 
+# Archived tests - should not be in repo
+tests/_archived*/
+
 # Dependencies
 node_modules/
 bower_components/
@@ -212,7 +215,9 @@ test-sam-app/
 
 # Test output files
 output/
-test_*.py
+/test_*.py  # Ignore test files in root directory only
+# Test files in tests/ directory should be in version control
+tests/_archived_unit_tests/  # Archived unit tests not part of current test suite
 test_*.xlsx
 *.test
 api-examples

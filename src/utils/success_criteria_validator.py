@@ -23,7 +23,7 @@ class SuccessCriteriaValidator:
             "maximum_poor_rate": 0.2,  # No more than 20% "Poor"
             "minimum_confidence": 0.7,  # Average confidence above 0.7 (future)
             "maximum_processing_failures": 0.1,  # No more than 10% processing failures
-            "minimum_component_accuracy": 0.8  # Future: component-level accuracy
+            "minimum_component_accuracy": 0.8,  # Future: component-level accuracy
         }
 
         self.results_dir = Path("tests/evaluation/validation_suite/results")
@@ -41,7 +41,7 @@ class SuccessCriteriaValidator:
             "overall_result": None,
             "recommendations": [],
             "trend_analysis": None,
-            "alerts": []
+            "alerts": [],
         }
 
         # Validate individual criteria
@@ -96,8 +96,12 @@ class SuccessCriteriaValidator:
             "details": {
                 "good_assessments": assessment_summary.get("good_assessments", 0),
                 "total_assessments": assessment_summary.get("total_assessments", 0),
-                "shortfall_assessments": max(0, int(target * assessment_summary.get("total_assessments", 0)) - assessment_summary.get("good_assessments", 0))
-            }
+                "shortfall_assessments": max(
+                    0,
+                    int(target * assessment_summary.get("total_assessments", 0))
+                    - assessment_summary.get("good_assessments", 0),
+                ),
+            },
         }
 
         if not result["passed"]:
@@ -121,8 +125,12 @@ class SuccessCriteriaValidator:
             "details": {
                 "poor_assessments": assessment_summary.get("poor_assessments", 0),
                 "total_assessments": assessment_summary.get("total_assessments", 0),
-                "excess_poor_assessments": max(0, assessment_summary.get("poor_assessments", 0) - int(target * assessment_summary.get("total_assessments", 0)))
-            }
+                "excess_poor_assessments": max(
+                    0,
+                    assessment_summary.get("poor_assessments", 0)
+                    - int(target * assessment_summary.get("total_assessments", 0)),
+                ),
+            },
         }
 
         if not result["passed"]:
@@ -150,8 +158,8 @@ class SuccessCriteriaValidator:
                 "failed_drawings": failed_processing,
                 "total_drawings": total_drawings,
                 "failure_rate": failure_rate,
-                "reliability_rate": 1 - failure_rate
-            }
+                "reliability_rate": 1 - failure_rate,
+            },
         }
 
         if not result["passed"]:
@@ -168,26 +176,19 @@ class SuccessCriteriaValidator:
             "actual_value": None,
             "passed": None,
             "confidence": "not_implemented",
-            "details": {
-                "note": "Confidence score validation not yet implemented - requires judge confidence scores"
-            }
+            "details": {"note": "Confidence score validation not yet implemented - requires judge confidence scores"},
         }
 
     def _calculate_overall_result(self, individual_criteria: dict[str, Any]) -> dict[str, Any]:
         """Calculate overall pass/fail result."""
         implemented_criteria = [
-            criteria for criteria in individual_criteria.values()
+            criteria
+            for criteria in individual_criteria.values()
             if criteria.get("confidence") != "not_implemented" and criteria.get("passed") is not None
         ]
 
         if not implemented_criteria:
-            return {
-                "status": "no_data",
-                "passed_count": 0,
-                "failed_count": 0,
-                "total_count": 0,
-                "pass_rate": 0
-            }
+            return {"status": "no_data", "passed_count": 0, "failed_count": 0, "total_count": 0, "pass_rate": 0}
 
         passed_count = sum(1 for criteria in implemented_criteria if criteria["passed"])
         total_count = len(implemented_criteria)
@@ -198,7 +199,9 @@ class SuccessCriteriaValidator:
             "failed_count": total_count - passed_count,
             "total_count": total_count,
             "pass_rate": passed_count / total_count if total_count > 0 else 0,
-            "critical_failures": len([c for c in implemented_criteria if not c["passed"] and c.get("priority") == "critical"])
+            "critical_failures": len(
+                [c for c in implemented_criteria if not c["passed"] and c.get("priority") == "critical"]
+            ),
         }
 
     def _generate_recommendations(self, individual_criteria: dict[str, Any]) -> list[dict[str, Any]]:
@@ -208,49 +211,69 @@ class SuccessCriteriaValidator:
         for criterion_name, criterion in individual_criteria.items():
             if criterion.get("passed") is False:
                 if criterion_name == "good_rate":
-                    recommendations.append({
-                        "priority": criterion.get("priority", "medium"),
-                        "title": "Improve Assessment Quality",
-                        "description": f"Good rate of {criterion['actual_value']:.1%} below target of {criterion['target_value']:.1%}",
-                        "actions": [
-                            "Review and enhance core extraction algorithms",
-                            "Improve model training or fine-tuning",
-                            "Add validation steps in processing pipeline",
-                            f"Focus on improving {criterion['details']['shortfall_assessments']} additional assessments"
-                        ],
-                        "impact": "high",
-                        "effort": "high"
-                    })
+                    recommendations.append(
+                        {
+                            "priority": criterion.get("priority", "medium"),
+                            "title": "Improve Assessment Quality",
+                            "description": (
+                                f"Good rate of {criterion['actual_value']:.1%} "
+                                f"below target of {criterion['target_value']:.1%}"
+                            ),
+                            "actions": [
+                                "Review and enhance core extraction algorithms",
+                                "Improve model training or fine-tuning",
+                                "Add validation steps in processing pipeline",
+                                (
+                                    f"Focus on improving "
+                                    f"{criterion['details']['shortfall_assessments']} additional assessments"
+                                ),
+                            ],
+                            "impact": "high",
+                            "effort": "high",
+                        }
+                    )
 
                 elif criterion_name == "poor_rate":
-                    recommendations.append({
-                        "priority": criterion.get("priority", "medium"),
-                        "title": "Reduce Poor Assessments",
-                        "description": f"Poor rate of {criterion['actual_value']:.1%} exceeds target of {criterion['target_value']:.1%}",
-                        "actions": [
-                            "Identify patterns in poor-performing drawings",
-                            "Add specialized handling for challenging drawing types",
-                            "Improve error detection and recovery",
-                            f"Improve {criterion['details']['excess_poor_assessments']} assessments from Poor to Fair/Good"
-                        ],
-                        "impact": "high",
-                        "effort": "medium"
-                    })
+                    recommendations.append(
+                        {
+                            "priority": criterion.get("priority", "medium"),
+                            "title": "Reduce Poor Assessments",
+                            "description": (
+                                f"Poor rate of {criterion['actual_value']:.1%} "
+                                f"exceeds target of {criterion['target_value']:.1%}"
+                            ),
+                            "actions": [
+                                "Identify patterns in poor-performing drawings",
+                                "Add specialized handling for challenging drawing types",
+                                "Improve error detection and recovery",
+                                (
+                                    f"Improve {criterion['details']['excess_poor_assessments']} "
+                                    "assessments from Poor to Fair/Good"
+                                ),
+                            ],
+                            "impact": "high",
+                            "effort": "medium",
+                        }
+                    )
 
                 elif criterion_name == "processing_reliability":
-                    recommendations.append({
-                        "priority": "critical",
-                        "title": "Fix Processing Failures",
-                        "description": f"Processing failure rate of {criterion['details']['failure_rate']:.1%} too high",
-                        "actions": [
-                            "Add comprehensive error handling",
-                            "Implement retry logic for transient failures",
-                            "Add input validation and graceful degradation",
-                            "Monitor and fix root causes of processing failures"
-                        ],
-                        "impact": "critical",
-                        "effort": "medium"
-                    })
+                    recommendations.append(
+                        {
+                            "priority": "critical",
+                            "title": "Fix Processing Failures",
+                            "description": (
+                                f"Processing failure rate of " f"{criterion['details']['failure_rate']:.1%} too high"
+                            ),
+                            "actions": [
+                                "Add comprehensive error handling",
+                                "Implement retry logic for transient failures",
+                                "Add input validation and graceful degradation",
+                                "Monitor and fix root causes of processing failures",
+                            ],
+                            "impact": "critical",
+                            "effort": "medium",
+                        }
+                    )
 
         # Sort by priority
         priority_order = {"critical": 1, "high": 2, "medium": 3, "low": 4}
@@ -268,7 +291,7 @@ class SuccessCriteriaValidator:
                 return {
                     "status": "insufficient_data",
                     "message": "Need at least 2 historical runs for trend analysis",
-                    "available_runs": len(historical_results)
+                    "available_runs": len(historical_results),
                 }
 
             # Calculate trends
@@ -288,33 +311,33 @@ class SuccessCriteriaValidator:
                     # Simple trend calculation
                     recent_avg = sum(values[-3:]) / min(3, len(values))  # Last 3 runs
                     overall_avg = sum(values) / len(values)
-                    trend_direction = "improving" if recent_avg > overall_avg else "declining" if recent_avg < overall_avg else "stable"
+                    trend_direction = (
+                        "improving"
+                        if recent_avg > overall_avg
+                        else "declining"
+                        if recent_avg < overall_avg
+                        else "stable"
+                    )
 
                     trends[metric] = {
                         "direction": trend_direction,
                         "recent_average": recent_avg,
                         "overall_average": overall_avg,
                         "data_points": len(values),
-                        "change_rate": (recent_avg - overall_avg) / overall_avg if overall_avg > 0 else 0
+                        "change_rate": (recent_avg - overall_avg) / overall_avg if overall_avg > 0 else 0,
                     }
 
             return {
                 "status": "success",
                 "historical_runs_analyzed": len(historical_results),
-                "date_range": {
-                    "earliest": min(dates) if dates else None,
-                    "latest": max(dates) if dates else None
-                },
+                "date_range": {"earliest": min(dates) if dates else None, "latest": max(dates) if dates else None},
                 "trends": trends,
-                "overall_trend": self._determine_overall_trend(trends)
+                "overall_trend": self._determine_overall_trend(trends),
             }
 
         except Exception as e:
             logger.error(f"Error analyzing trends: {e}")
-            return {
-                "status": "error",
-                "message": f"Trend analysis failed: {e}"
-            }
+            return {"status": "error", "message": f"Trend analysis failed: {e}"}
 
     async def _load_historical_results(self) -> list[dict[str, Any]]:
         """Load historical validation results for trend analysis."""
@@ -354,50 +377,58 @@ class SuccessCriteriaValidator:
         else:
             return "stable"
 
-    def _generate_alerts(self, individual_criteria: dict[str, Any], trend_analysis: dict[str, Any] | None) -> list[dict[str, Any]]:
+    def _generate_alerts(
+        self, individual_criteria: dict[str, Any], trend_analysis: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
         """Generate alerts for critical issues or concerning trends."""
         alerts = []
 
         # Critical failure alerts
         for _criterion_name, criterion in individual_criteria.items():
             if not criterion.get("passed", True) and criterion.get("priority") == "critical":
-                alerts.append({
-                    "level": "critical",
-                    "type": "criteria_failure",
-                    "title": f"Critical Failure: {criterion['criterion']}",
-                    "message": "Critical success criterion failed - immediate attention required",
-                    "details": criterion,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
+                alerts.append(
+                    {
+                        "level": "critical",
+                        "type": "criteria_failure",
+                        "title": f"Critical Failure: {criterion['criterion']}",
+                        "message": "Critical success criterion failed - immediate attention required",
+                        "details": criterion,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                )
 
         # Multiple criteria failure alert
         failed_criteria = [c for c in individual_criteria.values() if not c.get("passed", True)]
         if len(failed_criteria) >= 2:
-            alerts.append({
-                "level": "high",
-                "type": "multiple_failures",
-                "title": "Multiple Success Criteria Failed",
-                "message": f"{len(failed_criteria)} success criteria failed simultaneously",
-                "details": {
-                    "failed_criteria": [c["criterion"] for c in failed_criteria],
-                    "count": len(failed_criteria)
-                },
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            alerts.append(
+                {
+                    "level": "high",
+                    "type": "multiple_failures",
+                    "title": "Multiple Success Criteria Failed",
+                    "message": f"{len(failed_criteria)} success criteria failed simultaneously",
+                    "details": {
+                        "failed_criteria": [c["criterion"] for c in failed_criteria],
+                        "count": len(failed_criteria),
+                    },
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
         # Trend-based alerts
         if trend_analysis and trend_analysis.get("status") == "success":
             overall_trend = trend_analysis.get("overall_trend", "unknown")
 
             if overall_trend == "declining":
-                alerts.append({
-                    "level": "medium",
-                    "type": "performance_degradation",
-                    "title": "Performance Degradation Detected",
-                    "message": "System performance showing declining trend across multiple metrics",
-                    "details": trend_analysis,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
+                alerts.append(
+                    {
+                        "level": "medium",
+                        "type": "performance_degradation",
+                        "title": "Performance Degradation Detected",
+                        "message": "System performance showing declining trend across multiple metrics",
+                        "details": trend_analysis,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                )
 
         return alerts
 
@@ -410,7 +441,7 @@ class SuccessCriteriaValidator:
 
         # Save validation results
         validation_file = self.results_dir / f"{validation['validation_run_id']}_success_criteria.json"
-        with open(validation_file, 'w') as f:
+        with open(validation_file, "w") as f:
             json.dump(validation, f, indent=2, default=str)
 
         logger.info(f"Success criteria validation saved: {validation_file}")
@@ -418,12 +449,17 @@ class SuccessCriteriaValidator:
         # Save alerts separately if any exist
         if validation.get("alerts"):
             alerts_file = self.alerts_dir / f"{validation['validation_run_id']}_alerts.json"
-            with open(alerts_file, 'w') as f:
-                json.dump({
-                    "validation_run_id": validation["validation_run_id"],
-                    "generated_at": validation["validated_at"],
-                    "alerts": validation["alerts"]
-                }, f, indent=2, default=str)
+            with open(alerts_file, "w") as f:
+                json.dump(
+                    {
+                        "validation_run_id": validation["validation_run_id"],
+                        "generated_at": validation["validated_at"],
+                        "alerts": validation["alerts"],
+                    },
+                    f,
+                    indent=2,
+                    default=str,
+                )
 
             logger.warning(f"Validation alerts generated: {alerts_file}")
 
@@ -441,7 +477,10 @@ class SuccessCriteriaValidator:
             failed_criteria = []
             for _criterion_name, criterion in validation_results.get("individual_criteria", {}).items():
                 if not criterion.get("passed", True):
-                    failed_criteria.append(f"  - {criterion['criterion']}: {criterion['actual_value']:.1%} (target: {criterion['target_value']:.1%})")
+                    failed_criteria.append(
+                        f"  - {criterion['criterion']}: {criterion['actual_value']:.1%} "
+                        f"(target: {criterion['target_value']:.1%})"
+                    )
 
             if failed_criteria:
                 summary_lines.append("Failed Criteria:")

@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from src.models.job import JobStatus
@@ -18,9 +20,9 @@ class ProcessDrawingResponse(BaseModel):
     job_id: str = Field(..., description="Unique job identifier")
     status: JobStatus = Field(..., description="Current job status")
     estimated_time_seconds: int | None = Field(default=300, description="Estimated processing time in seconds")
-    metadata: dict | None = Field(default=None, description="PDF metadata information")
+    metadata: dict[str, Any] | None = Field(default=None, description="PDF metadata information")
     file_path: str | None = Field(default=None, description="Path to generated Excel file")
-    summary: dict | None = Field(default=None, description="Summary statistics")
+    summary: dict[str, Any] | None = Field(default=None, description="Summary statistics")
 
 
 class ErrorResponse(BaseModel):

@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ class EnvironmentCache:
             ttl: Cache time-to-live in seconds (default: 5 minutes)
         """
         self.ttl = ttl
-        self._cache = {}
-        self._cache_timestamps = {}
+        self._cache: dict[str, Any] = {}
+        self._cache_timestamps: dict[str, float] = {}
 
         # Pre-cache common environment variables
         self._precache_common_vars()
@@ -30,15 +30,15 @@ class EnvironmentCache:
     def _precache_common_vars(self) -> None:
         """Pre-cache commonly used environment variables."""
         common_vars = [
-            'ENVIRONMENT',
-            'S3_BUCKET',
-            'DYNAMODB_TABLE',
-            'SQS_QUEUE_URL',
-            'GEMINI_API_KEY_PARAMETER',
-            'SNS_ALERT_TOPIC_ARN',
-            'STACK_NAME',
-            'AWS_REGION',
-            'STORAGE_MODE'
+            "ENVIRONMENT",
+            "S3_BUCKET",
+            "DYNAMODB_TABLE",
+            "SQS_QUEUE_URL",
+            "GEMINI_API_KEY_PARAMETER",
+            "SNS_ALERT_TOPIC_ARN",
+            "STACK_NAME",
+            "AWS_REGION",
+            "STORAGE_MODE",
         ]
 
         for var in common_vars:
@@ -114,7 +114,7 @@ class EnvironmentCache:
             return value
 
         if isinstance(value, str):
-            return value.lower() in ('true', '1', 'yes', 'on')
+            return value.lower() in ("true", "1", "yes", "on")
 
         return bool(value)
 
@@ -166,7 +166,7 @@ class EnvironmentCache:
         active_entries = 0
         expired_entries = 0
 
-        for key, timestamp in self._cache_timestamps.items():
+        for _key, timestamp in self._cache_timestamps.items():
             cache_age = current_time - timestamp
             if cache_age < self.ttl:
                 active_entries += 1
@@ -174,10 +174,10 @@ class EnvironmentCache:
                 expired_entries += 1
 
         return {
-            'total_entries': len(self._cache),
-            'active_entries': active_entries,
-            'expired_entries': expired_entries,
-            'cache_ttl_seconds': self.ttl
+            "total_entries": len(self._cache),
+            "active_entries": active_entries,
+            "expired_entries": expired_entries,
+            "cache_ttl_seconds": self.ttl,
         }
 
     def get_all_cached(self) -> dict[str, Any]:
@@ -194,11 +194,7 @@ class EnvironmentCache:
             cache_age = current_time - timestamp
 
             if cache_age < self.ttl:
-                active_cache[key] = {
-                    'value': value,
-                    'cached_at': timestamp,
-                    'age_seconds': cache_age
-                }
+                active_cache[key] = {"value": value, "cached_at": timestamp, "age_seconds": cache_age}
 
         return active_cache
 
@@ -261,7 +257,7 @@ def cached_getenv_bool(key: str, default: bool = False) -> bool:
 
 
 @lru_cache(maxsize=128)
-def get_static_config(config_key: str) -> Optional[str]:
+def get_static_config(config_key: str) -> str | None:
     """Get static configuration values that never change during Lambda execution.
 
     Uses LRU cache for maximum performance on truly static values.
@@ -273,13 +269,13 @@ def get_static_config(config_key: str) -> Optional[str]:
         Configuration value or None
     """
     static_configs = {
-        'aws_region': os.getenv('AWS_REGION', 'us-east-1'),
-        'function_name': os.getenv('AWS_LAMBDA_FUNCTION_NAME'),
-        'function_version': os.getenv('AWS_LAMBDA_FUNCTION_VERSION'),
-        'log_group': os.getenv('AWS_LAMBDA_LOG_GROUP_NAME'),
-        'memory_size': os.getenv('AWS_LAMBDA_FUNCTION_MEMORY_SIZE'),
-        'runtime': 'python3.11',  # Static for our deployment
-        'architecture': 'arm64'   # Static for our deployment
+        "aws_region": os.getenv("AWS_REGION", "us-east-1"),
+        "function_name": os.getenv("AWS_LAMBDA_FUNCTION_NAME"),
+        "function_version": os.getenv("AWS_LAMBDA_FUNCTION_VERSION"),
+        "log_group": os.getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
+        "memory_size": os.getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE"),
+        "runtime": "python3.11",  # Static for our deployment
+        "architecture": "arm64",  # Static for our deployment
     }
 
     return static_configs.get(config_key)
@@ -295,13 +291,13 @@ def warm_env_cache() -> None:
 
     # Common variables to pre-warm
     common_vars = [
-        'ENVIRONMENT',
-        'STORAGE_MODE',
-        'S3_BUCKET',
-        'DYNAMODB_TABLE',
-        'SQS_QUEUE_URL',
-        'GEMINI_API_KEY_PARAMETER',
-        'SNS_ALERT_TOPIC_ARN'
+        "ENVIRONMENT",
+        "STORAGE_MODE",
+        "S3_BUCKET",
+        "DYNAMODB_TABLE",
+        "SQS_QUEUE_URL",
+        "GEMINI_API_KEY_PARAMETER",
+        "SNS_ALERT_TOPIC_ARN",
     ]
 
     for var in common_vars:
@@ -320,7 +316,7 @@ def get_cache_headers(max_age: int = 300) -> dict[str, str]:
         Dictionary of cache headers
     """
     return {
-        'Cache-Control': f'public, max-age={max_age}',
-        'Expires': str(int(time.time() + max_age)),
-        'ETag': f'"{hash(str(time.time()))}"'  # Simple ETag generation
+        "Cache-Control": f"public, max-age={max_age}",
+        "Expires": str(int(time.time() + max_age)),
+        "ETag": f'"{hash(str(time.time()))}"',  # Simple ETag generation
     }

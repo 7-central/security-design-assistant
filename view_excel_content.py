@@ -94,8 +94,10 @@ def view_excel_file(file_path):
 
 # View the most recent Excel files
 excel_files = [
-    "/Users/leehayton/Cursor Projects/7central/security_and_design/local_output/test_client/test_project/job_job_20250808081920952/schedule_20250808_072111.xlsx",
-    "/Users/leehayton/Cursor Projects/7central/security_and_design/local_output/test_client/test_project/job_job_20250808081455014/schedule_20250808_071639.xlsx",
+    "/Users/leehayton/Cursor Projects/7central/security_and_design/local_output/test_client/"
+    "test_project/job_job_20250808081920952/schedule_20250808_072111.xlsx",
+    "/Users/leehayton/Cursor Projects/7central/security_and_design/local_output/test_client/"
+    "test_project/job_job_20250808081455014/schedule_20250808_071639.xlsx",
     "/Users/leehayton/Cursor Projects/7central/security_and_design/test_output.xlsx"  # From the working test
 ]
 

@@ -7,6 +7,7 @@ from typing import Any
 
 class JobStatus(str, Enum):
     """Job processing status."""
+
     QUEUED = "queued"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -16,6 +17,7 @@ class JobStatus(str, Enum):
 @dataclass
 class Job:
     """Job model for tracking PDF processing tasks."""
+
     job_id: str
     client_name: str
     project_name: str
@@ -83,5 +85,5 @@ class Job:
             "processing_results": self.processing_results,
             "file_path": self.file_path,
             "error_message": self.error_message,
-            "processing_time_seconds": self.processing_time_seconds
+            "processing_time_seconds": self.processing_time_seconds,
         }

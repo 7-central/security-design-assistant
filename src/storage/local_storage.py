@@ -8,7 +8,7 @@ from src.storage.interface import StorageInterface
 class LocalStorage(StorageInterface):
     """Local file system implementation of storage interface."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.base_path = settings.local_output_path
         self.jobs_file = self.base_path / "jobs.json"
         self._ensure_directories()
@@ -93,7 +93,8 @@ class LocalStorage(StorageInterface):
 
         try:
             jobs_data = json.loads(self.jobs_file.read_text())
-            return jobs_data.get(job_id)
+            result = jobs_data.get(job_id)
+            return result if result is not None else None
         except json.JSONDecodeError:
             return None
 

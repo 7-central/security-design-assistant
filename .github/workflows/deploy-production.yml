@@ -1,7 +1,8 @@
 name: Deploy to Production
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [ main ]
   workflow_dispatch:
     inputs:
@@ -28,6 +29,7 @@ jobs:
   pre-production-validation:
     name: Pre-production Validation
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     outputs:
       validation_passed: ${{ steps.validation.outputs.validation_passed }}
       staging_health: ${{ steps.staging_check.outputs.health_status }}
