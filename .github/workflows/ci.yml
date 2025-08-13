@@ -77,9 +77,9 @@ jobs:
       fail-fast: false  # Don't cancel other tests if one fails
       matrix:
         test-group:
-          - "api"           # test_api_e2e.py (4m)
-          - "pipeline"      # test_full_pipeline_e2e.py (3m)
-          - "consistency"   # test_consistency_e2e.py (2m)
+          - "api"           # test_api_e2e.py (4-5m with context)
+          - "pipeline"      # test_full_pipeline_e2e.py (3-4m with Judge)
+          - "consistency"   # test_consistency_e2e.py (2-3m)
           - "error"         # test_error_handling_e2e.py (30s)
     
     steps:
@@ -109,19 +109,23 @@ jobs:
           AWS_REGION: ${{ env.AWS_REGION }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Run specific test group based on matrix
+          # Run specific test group based on matrix with appropriate timeouts
           case "${{ matrix.test-group }}" in
             api)
-              pytest tests/e2e/test_api_e2e.py -v -m e2e --tb=short
+              # API tests can take 4-5 minutes with context processing
+              pytest tests/e2e/test_api_e2e.py -v -m e2e --tb=short --timeout=300
               ;;
             pipeline)
-              pytest tests/e2e/test_full_pipeline_e2e.py -v -m e2e --tb=short
+              # Pipeline tests can take 3-4 minutes with Judge evaluation
+              pytest tests/e2e/test_full_pipeline_e2e.py -v -m e2e --tb=short --timeout=240
               ;;
             consistency)
-              pytest tests/e2e/test_consistency_e2e.py -v -m e2e --tb=short
+              # Consistency tests run multiple times, 2-3 minutes total
+              pytest tests/e2e/test_consistency_e2e.py -v -m e2e --tb=short --timeout=180
               ;;
             error)
-              pytest tests/e2e/test_error_handling_e2e.py -v -m e2e --tb=short
+              # Error handling tests are quick, under 1 minute
+              pytest tests/e2e/test_error_handling_e2e.py -v -m e2e --tb=short --timeout=60
               ;;
           esac
       

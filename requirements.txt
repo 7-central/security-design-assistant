@@ -4,6 +4,7 @@ pypdf==4.2.0
 Pillow==10.2.0
 pytest==8.0.0
 pytest-xdist==3.5.0
+pytest-timeout==2.2.0
 uvicorn==0.27.0
 python-multipart==0.0.6
 httpx==0.26.0
