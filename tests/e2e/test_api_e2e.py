@@ -8,7 +8,7 @@ import pytest
 @pytest.mark.e2e
 def test_api_endpoint(api_client):
     """Test the full API endpoint with all agents."""
-    
+
     # Use the api_client fixture which already has the server running
     client = api_client
 
@@ -123,5 +123,6 @@ Please list them with all their relevant information and attributes."""
 if __name__ == "__main__":
     # For standalone execution, use pytest
     import sys
+
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))

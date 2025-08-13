@@ -178,10 +178,12 @@ class TestContextAgent:
             ]
         })
 
-        with patch.object(context_agent, 'upload_file',
-                         return_value=mock_uploaded_file) as mock_upload:
-            with patch.object(context_agent, 'generate_content',
-                            return_value=mock_response) as mock_generate:
+        with (
+            patch.object(context_agent, 'upload_file',
+                        return_value=mock_uploaded_file) as mock_upload,
+            patch.object(context_agent, 'generate_content',
+                        return_value=mock_response) as mock_generate,
+        ):
                 result = await context_agent.process(input_data)
 
         # Clean up temp file
@@ -299,7 +301,7 @@ class TestContextAgent:
 
         with patch.object(context_agent, '_generate_with_retry',
                          return_value=mock_response):
-            result = await context_agent.process(input_data)
+            await context_agent.process(input_data)
 
         # Verify job metadata was updated
         mock_job.update_metadata.assert_called_once()

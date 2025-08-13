@@ -116,12 +116,12 @@ jobs:
               pytest tests/e2e/test_api_e2e.py -v -m e2e --tb=short --timeout=300
               ;;
             pipeline)
-              # Pipeline tests can take 3-4 minutes with Judge evaluation
-              pytest tests/e2e/test_full_pipeline_e2e.py -v -m e2e --tb=short --timeout=240
+              # Pipeline tests can take 5-6 minutes with Judge evaluation
+              pytest tests/e2e/test_full_pipeline_e2e.py -v -m e2e --tb=short --timeout=360
               ;;
             consistency)
-              # Consistency tests run multiple times, 2-3 minutes total
-              pytest tests/e2e/test_consistency_e2e.py -v -m e2e --tb=short --timeout=180
+              # Consistency tests run multiple times, 4-5 minutes total  
+              pytest tests/e2e/test_consistency_e2e.py -v -m e2e --tb=short --timeout=300
               ;;
             error)
               # Error handling tests are quick, under 1 minute

@@ -23,7 +23,7 @@ class TestErrorHandlingE2E:
 
         try:
             # Upload non-PDF file
-            s3_uri = e2e_job_helper.upload_pdf(job_id, invalid_file)
+            e2e_job_helper.upload_pdf(job_id, invalid_file)
 
             # Create job
             table = aws_clients['dynamodb'].Table(e2e_job_helper.table_name)
