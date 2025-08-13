@@ -18,8 +18,8 @@ from src.api.models import (
 )
 from src.models.job import Job, JobStatus
 from src.storage.interface import StorageInterface
-from src.storage.local_storage import LocalStorage
 from src.utils.id_generator import generate_job_id
+from src.utils.storage_manager import StorageManager
 from src.utils.pdf_processor import (
     CorruptedPDFError,
     MissingDependencyError,
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB in bytes
 
-# Initialize storage
-storage: StorageInterface = LocalStorage()
+# Initialize storage using StorageManager based on environment
+storage: StorageInterface = StorageManager.get_storage()
 
 
 @router.get("/health", response_model=HealthResponse)

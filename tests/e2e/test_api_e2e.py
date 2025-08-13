@@ -1,33 +1,16 @@
 """Simple E2E test of the full API endpoint."""
-import threading
 import time
 from pathlib import Path
 
-import httpx
-import uvicorn
+import pytest
 
 
-def test_api_endpoint():
+@pytest.mark.e2e
+def test_api_endpoint(api_client):
     """Test the full API endpoint with all agents."""
-
-    # Start FastAPI server in background
-    from src.api.main import app
-
-    config = uvicorn.Config(
-        app=app,
-        host="127.0.0.1",
-        port=8002,  # Different port to avoid conflicts
-        log_level="warning"
-    )
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-
-    # Wait for server to start
-    time.sleep(3)
-
-    # Create client with 5-minute timeout
-    client = httpx.Client(base_url="http://127.0.0.1:8002", timeout=300.0)
+    
+    # Use the api_client fixture which already has the server running
+    client = api_client
 
     # Verify server is running
     response = client.get("/health")
@@ -138,10 +121,7 @@ Please list them with all their relevant information and attributes."""
 
 
 if __name__ == "__main__":
-    success = test_api_endpoint()
-    if success:
-        print("\n" + "="*50)
-        print("Full API E2E test completed successfully!")
-    else:
-        print("\n" + "="*50)
-        print("API test failed - check error messages above")
+    # For standalone execution, use pytest
+    import sys
+    import pytest
+    sys.exit(pytest.main([__file__, "-v"]))
