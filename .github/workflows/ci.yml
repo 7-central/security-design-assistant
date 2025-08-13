@@ -3,8 +3,6 @@ name: CI - Test and Validate
 on:
   pull_request:
     branches: [ main, dev ]
-  push:
-    branches: [ dev ]
 
 env:
   PYTHON_VERSION: '3.11'
@@ -157,3 +155,4 @@ jobs:
       - name: Validate dev template
         run: |
           sam validate --template infrastructure/dev-template.yaml --region ${{ env.AWS_REGION }}
+
