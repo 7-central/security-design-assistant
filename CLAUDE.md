@@ -1,45 +1,63 @@
 # Claude Developer Guidelines
 
-## Fast Validation Workflow
+## Simplified Workflow
 
-When making code changes, use this fast validation loop to ensure code quality without running expensive E2E tests:
+This project uses a streamlined development workflow:
+- **Local development** with dev AWS storage for testing
+- **Direct deployment** to production on main branch push
+- **No CI/CD pipeline** - quality checks run locally
 
-### Quick Validation (Run After Every Change)
+## Development Workflow
+
+### 1. Complete Local Test Suite
 ```bash
-# Run type checking and linting with strict rules
+# Run everything: validation, unit tests, then start server
+./test_local.sh
+```
+
+This script:
+1. Runs type checking and linting (`./scripts/validate_types.sh`)
+2. Runs unit tests
+3. Starts API server with dev AWS storage for manual testing
+
+### 2. Manual Testing with Dev Storage
+The local test script configures:
+- `ENV=dev`
+- `STORAGE_MODE=aws` 
+- `AWS_PROFILE=design-lee`
+- Uses dev S3 bucket and DynamoDB table
+
+Test endpoints:
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Process a drawing
+curl -X POST http://localhost:8000/process-drawing \
+  -F 'drawing_file=@test.pdf' \
+  -F 'client_name=test' \
+  -F 'project_name=test'
+```
+
+### 3. Deploy to Production
+```bash
+# Commit and push to main (triggers auto-deploy)
+git add .
+git commit -m "Your changes"
+git push origin main
+```
+
+## Quick Commands
+
+### Validation Only
+```bash
+# Fast type checking and linting
 ./scripts/validate_types.sh
 ```
 
-### Mypy Daemon (For Instant Feedback)
+### Unit Tests Only
 ```bash
-# Start the daemon once per session
-./scripts/start_mypy_daemon.sh
-
-# Then use for instant checks
-dmypy check src
-```
-
-### Testing Hierarchy
-1. **During Development** - Run validation script frequently
-2. **After Each Phase** - Run unit tests: `pytest tests/unit -m unit -v`
-3. **Before Push** - Smoke test: `ENV=dev STORAGE_MODE=local pytest tests/e2e/test_error_handling_e2e.py::TestErrorHandlingE2E::test_invalid_file_upload -v`
-4. **Final Validation** - Full E2E: `ENV=dev STORAGE_MODE=local pytest tests/e2e -m e2e -v`
-
-### Pre-Push Hook
-A git pre-push hook is installed that automatically runs validation before allowing pushes. This prevents broken code from reaching the repository.
-
-## Validation Commands
-
-### Lint and Type Checking
-```bash
-# Run both mypy and ruff with strict settings
-./scripts/validate_types.sh
-
-# Run mypy alone with strict settings
-mypy src --strict --show-error-codes --pretty --ignore-missing-imports
-
-# Run ruff alone with strict settings
-ruff check src tests
+pytest tests/unit -m unit -v
 ```
 
 ### Fix Commands
@@ -52,6 +70,8 @@ ruff format src tests
 ```
 
 ## Important Notes
-- Always run `./scripts/validate_types.sh` before committing
-- The pre-push hook will block pushes if validation fails
-- Use `# type: ignore[specific-code]` sparingly and document why
+- **No dev/staging branches** - work on feature branches, merge to main
+- **No E2E test suite** - replaced with manual testing
+- **Dev AWS resources** - only S3 and DynamoDB for safe testing
+- **Pre-push hook** - validates code before allowing push
+- **Simple deployment** - push to main deploys to production
