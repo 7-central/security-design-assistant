@@ -1,6 +1,9 @@
 # Custom ignore
 .ignore/
 
+# Archived tests - should not be in repo
+tests/_archived*/
+
 # Dependencies
 node_modules/
 bower_components/

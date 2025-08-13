@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BatchOperation:
     """Represents a batch S3 operation."""
+
     operation_type: str  # 'get', 'put', 'delete', 'head'
     bucket: str
     key: str
@@ -46,12 +47,7 @@ class S3BatchProcessor:
         self._last_flush = datetime.now()
 
         # Statistics
-        self.stats = {
-            'total_operations': 0,
-            'batches_processed': 0,
-            'api_calls_saved': 0,
-            'total_api_calls': 0
-        }
+        self.stats = {"total_operations": 0, "batches_processed": 0, "api_calls_saved": 0, "total_api_calls": 0}
 
     async def add_operation(self, operation: BatchOperation) -> Any:
         """Add an operation to the batch queue.
@@ -63,12 +59,12 @@ class S3BatchProcessor:
             Operation result when batch is processed
         """
         self._pending_operations.append(operation)
-        self.stats['total_operations'] += 1
+        self.stats["total_operations"] += 1
 
         # Check if we should flush
         should_flush = (
-            len(self._pending_operations) >= self.batch_size or
-            (datetime.now() - self._last_flush).total_seconds() >= self.flush_interval
+            len(self._pending_operations) >= self.batch_size
+            or (datetime.now() - self._last_flush).total_seconds() >= self.flush_interval
         )
 
         if should_flush:
@@ -93,10 +89,10 @@ class S3BatchProcessor:
         results = []
 
         # Group operations by type for better batching
-        get_operations = [op for op in self._pending_operations if op.operation_type == 'get']
-        put_operations = [op for op in self._pending_operations if op.operation_type == 'put']
-        head_operations = [op for op in self._pending_operations if op.operation_type == 'head']
-        delete_operations = [op for op in self._pending_operations if op.operation_type == 'delete']
+        get_operations = [op for op in self._pending_operations if op.operation_type == "get"]
+        put_operations = [op for op in self._pending_operations if op.operation_type == "put"]
+        head_operations = [op for op in self._pending_operations if op.operation_type == "head"]
+        delete_operations = [op for op in self._pending_operations if op.operation_type == "delete"]
 
         # Process each type of operation
         if get_operations:
@@ -121,13 +117,13 @@ class S3BatchProcessor:
         self._last_flush = datetime.now()
 
         # Update statistics
-        self.stats['batches_processed'] += 1
+        self.stats["batches_processed"] += 1
         api_calls_made = len(get_operations) + len(put_operations) + len(head_operations)
         if delete_operations:
             api_calls_made += 1  # Delete can be batched into single call
 
-        self.stats['total_api_calls'] += api_calls_made
-        self.stats['api_calls_saved'] += max(0, processed_count - api_calls_made)
+        self.stats["total_api_calls"] += api_calls_made
+        self.stats["api_calls_saved"] += max(0, processed_count - api_calls_made)
 
         logger.info(f"Batch processed: {processed_count} operations, {api_calls_made} API calls")
 
@@ -140,15 +136,12 @@ class S3BatchProcessor:
         # Process GET operations concurrently to reduce total time
         async def get_single_object(operation: BatchOperation):
             try:
-                response = self.s3_client.get_object(
-                    Bucket=operation.bucket,
-                    Key=operation.key
-                )
+                response = self.s3_client.get_object(Bucket=operation.bucket, Key=operation.key)
                 result = {
-                    'operation': operation,
-                    'success': True,
-                    'data': response['Body'].read(),
-                    'metadata': response.get('Metadata', {})
+                    "operation": operation,
+                    "success": True,
+                    "data": response["Body"].read(),
+                    "metadata": response.get("Metadata", {}),
                 }
 
                 if operation.callback:
@@ -157,11 +150,7 @@ class S3BatchProcessor:
                 return result
 
             except ClientError as e:
-                error_result = {
-                    'operation': operation,
-                    'success': False,
-                    'error': str(e)
-                }
+                error_result = {"operation": operation, "success": False, "error": str(e)}
 
                 if operation.callback:
                     await operation.callback(error_result)
@@ -183,22 +172,18 @@ class S3BatchProcessor:
         for operation in operations:
             try:
                 put_kwargs = {
-                    'Bucket': operation.bucket,
-                    'Key': operation.key,
-                    'Body': operation.data,
-                    'StorageClass': 'INTELLIGENT_TIERING'  # Cost optimization
+                    "Bucket": operation.bucket,
+                    "Key": operation.key,
+                    "Body": operation.data,
+                    "StorageClass": "INTELLIGENT_TIERING",  # Cost optimization
                 }
 
                 if operation.metadata:
-                    put_kwargs['Metadata'] = {k: str(v) for k, v in operation.metadata.items()}
+                    put_kwargs["Metadata"] = {k: str(v) for k, v in operation.metadata.items()}
 
                 self.s3_client.put_object(**put_kwargs)
 
-                result = {
-                    'operation': operation,
-                    'success': True,
-                    'key': operation.key
-                }
+                result = {"operation": operation, "success": True, "key": operation.key}
 
                 if operation.callback:
                     await operation.callback(result)
@@ -206,11 +191,7 @@ class S3BatchProcessor:
                 results.append(result)
 
             except ClientError as e:
-                error_result = {
-                    'operation': operation,
-                    'success': False,
-                    'error': str(e)
-                }
+                error_result = {"operation": operation, "success": False, "error": str(e)}
 
                 if operation.callback:
                     await operation.callback(error_result)
@@ -225,22 +206,19 @@ class S3BatchProcessor:
 
         async def head_single_object(operation: BatchOperation):
             try:
-                response = self.s3_client.head_object(
-                    Bucket=operation.bucket,
-                    Key=operation.key
-                )
+                response = self.s3_client.head_object(Bucket=operation.bucket, Key=operation.key)
 
                 result = {
-                    'operation': operation,
-                    'success': True,
-                    'metadata': {
-                        'content_length': response['ContentLength'],
-                        'last_modified': response['LastModified'],
-                        'etag': response['ETag'],
-                        'content_type': response.get('ContentType', 'application/octet-stream'),
-                        'custom_metadata': response.get('Metadata', {}),
-                        'storage_class': response.get('StorageClass', 'STANDARD')
-                    }
+                    "operation": operation,
+                    "success": True,
+                    "metadata": {
+                        "content_length": response["ContentLength"],
+                        "last_modified": response["LastModified"],
+                        "etag": response["ETag"],
+                        "content_type": response.get("ContentType", "application/octet-stream"),
+                        "custom_metadata": response.get("Metadata", {}),
+                        "storage_class": response.get("StorageClass", "STANDARD"),
+                    },
                 }
 
                 if operation.callback:
@@ -249,11 +227,7 @@ class S3BatchProcessor:
                 return result
 
             except ClientError as e:
-                error_result = {
-                    'operation': operation,
-                    'success': False,
-                    'error': str(e)
-                }
+                error_result = {"operation": operation, "success": False, "error": str(e)}
 
                 if operation.callback:
                     await operation.callback(error_result)
@@ -285,33 +259,23 @@ class S3BatchProcessor:
         for bucket, bucket_operations in buckets.items():
             try:
                 # Use S3 batch delete API for efficiency
-                delete_keys = [{'Key': op.key} for op in bucket_operations]
+                delete_keys = [{"Key": op.key} for op in bucket_operations]
 
-                response = self.s3_client.delete_objects(
-                    Bucket=bucket,
-                    Delete={'Objects': delete_keys}
-                )
+                response = self.s3_client.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})
 
                 # Process successful deletions
-                deleted_keys = {obj['Key'] for obj in response.get('Deleted', [])}
+                deleted_keys = {obj["Key"] for obj in response.get("Deleted", [])}
 
                 for operation in bucket_operations:
                     success = operation.key in deleted_keys
-                    result = {
-                        'operation': operation,
-                        'success': success,
-                        'key': operation.key
-                    }
+                    result = {"operation": operation, "success": success, "key": operation.key}
 
                     if not success:
                         # Check if there was an error for this specific key
-                        errors = response.get('Errors', [])
-                        error_for_key = next(
-                            (err for err in errors if err.get('Key') == operation.key),
-                            None
-                        )
+                        errors = response.get("Errors", [])
+                        error_for_key = next((err for err in errors if err.get("Key") == operation.key), None)
                         if error_for_key:
-                            result['error'] = error_for_key.get('Message', 'Unknown error')
+                            result["error"] = error_for_key.get("Message", "Unknown error")
 
                     if operation.callback:
                         await operation.callback(result)
@@ -321,11 +285,7 @@ class S3BatchProcessor:
             except ClientError as e:
                 # If batch delete fails, mark all operations as failed
                 for operation in bucket_operations:
-                    error_result = {
-                        'operation': operation,
-                        'success': False,
-                        'error': str(e)
-                    }
+                    error_result = {"operation": operation, "success": False, "error": str(e)}
 
                     if operation.callback:
                         await operation.callback(error_result)
@@ -349,16 +309,14 @@ class S3BatchProcessor:
             Statistics about batch operations
         """
         efficiency = 0
-        if self.stats['total_operations'] > 0:
-            efficiency = (self.stats['api_calls_saved'] / self.stats['total_operations']) * 100
+        if self.stats["total_operations"] > 0:
+            efficiency = (self.stats["api_calls_saved"] / self.stats["total_operations"]) * 100
 
         return {
             **self.stats,
-            'pending_operations': len(self._pending_operations),
-            'efficiency_percent': round(efficiency, 2),
-            'avg_operations_per_batch': (
-                self.stats['total_operations'] / max(1, self.stats['batches_processed'])
-            )
+            "pending_operations": len(self._pending_operations),
+            "efficiency_percent": round(efficiency, 2),
+            "avg_operations_per_batch": (self.stats["total_operations"] / max(1, self.stats["batches_processed"])),
         }
 
     async def cleanup(self) -> None:
@@ -370,12 +328,7 @@ class S3BatchProcessor:
 
 
 # Convenience functions for common use cases
-async def batch_get_objects(
-    s3_client: Any,
-    bucket: str,
-    keys: list[str],
-    batch_size: int = 10
-) -> list[dict[str, Any]]:
+async def batch_get_objects(s3_client: Any, bucket: str, keys: list[str], batch_size: int = 10) -> list[dict[str, Any]]:
     """Batch get multiple S3 objects efficiently.
 
     Args:
@@ -389,14 +342,7 @@ async def batch_get_objects(
     """
     processor = S3BatchProcessor(s3_client, batch_size)
 
-    operations = [
-        BatchOperation(
-            operation_type='get',
-            bucket=bucket,
-            key=key
-        )
-        for key in keys
-    ]
+    operations = [BatchOperation(operation_type="get", bucket=bucket, key=key) for key in keys]
 
     for operation in operations:
         await processor.add_operation(operation)
@@ -408,10 +354,7 @@ async def batch_get_objects(
 
 
 async def batch_check_objects_exist(
-    s3_client: Any,
-    bucket: str,
-    keys: list[str],
-    batch_size: int = 20
+    s3_client: Any, bucket: str, keys: list[str], batch_size: int = 20
 ) -> dict[str, bool]:
     """Batch check if multiple S3 objects exist.
 
@@ -426,14 +369,7 @@ async def batch_check_objects_exist(
     """
     processor = S3BatchProcessor(s3_client, batch_size)
 
-    operations = [
-        BatchOperation(
-            operation_type='head',
-            bucket=bucket,
-            key=key
-        )
-        for key in keys
-    ]
+    operations = [BatchOperation(operation_type="head", bucket=bucket, key=key) for key in keys]
 
     for operation in operations:
         await processor.add_operation(operation)
@@ -444,9 +380,9 @@ async def batch_check_objects_exist(
     # Convert results to existence map
     existence_map = {}
     for result in results:
-        if isinstance(result, dict) and 'operation' in result:
-            key = result['operation'].key
-            exists = result['success'] and result.get('error', '') != '404'
+        if isinstance(result, dict) and "operation" in result:
+            key = result["operation"].key
+            exists = result["success"] and result.get("error", "") != "404"
             existence_map[key] = exists
 
     return existence_map

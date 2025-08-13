@@ -26,31 +26,24 @@ class TestErrorHandlingE2E:
             s3_uri = e2e_job_helper.upload_pdf(job_id, invalid_file)
 
             # Create job
-            table = aws_clients['dynamodb'].Table(e2e_job_helper.table_name)
+            table = aws_clients["dynamodb"].Table(e2e_job_helper.table_name)
 
             job_item = {
-                'company#client#job': f"7central#test_client#{job_id}",
-                'job_id': job_id,
-                'client_name': 'test_client',
-                'project_name': 'e2e_error_test',
-                'status': 'pending',
-                'file_path': s3_uri
+                "company#client#job": f"7central#test_client#{job_id}",
+                "job_id": job_id,
+                "client_name": "test_client",
+                "project_name": "e2e_error_test",
+                "status": "pending",
+                "file_path": s3_uri,
             }
 
             table.put_item(Item=job_item)
 
             # Process via API and expect failure
-            with open(invalid_file, 'rb') as f:
-                files = {'drawing_file': ('invalid.txt', f, 'text/plain')}
-                data = {
-                    'client_name': 'test_client',
-                    'project_name': 'e2e_error_test'
-                }
-                response = api_client.post(
-                    "/process-drawing",
-                    files=files,
-                    data=data
-                )
+            with open(invalid_file, "rb") as f:
+                files = {"drawing_file": ("invalid.txt", f, "text/plain")}
+                data = {"client_name": "test_client", "project_name": "e2e_error_test"}
+                response = api_client.post("/process-drawing", files=files, data=data)
 
             # API should reject non-PDF file
             assert response.status_code == 422  # Unprocessable Entity for wrong file type
@@ -78,31 +71,24 @@ class TestErrorHandlingE2E:
             s3_uri = e2e_job_helper.upload_pdf(job_id, corrupted_pdf_path)
 
             # Create job
-            table = aws_clients['dynamodb'].Table(e2e_job_helper.table_name)
+            table = aws_clients["dynamodb"].Table(e2e_job_helper.table_name)
 
             job_item = {
-                'company#client#job': f"7central#test_client#{job_id}",
-                'job_id': job_id,
-                'client_name': 'test_client',
-                'project_name': 'e2e_corrupted_test',
-                'status': 'pending',
-                'file_path': s3_uri
+                "company#client#job": f"7central#test_client#{job_id}",
+                "job_id": job_id,
+                "client_name": "test_client",
+                "project_name": "e2e_corrupted_test",
+                "status": "pending",
+                "file_path": s3_uri,
             }
 
             table.put_item(Item=job_item)
 
             # Process via API - should handle corruption gracefully
-            with open(corrupted_pdf_path, 'rb') as f:
-                files = {'drawing_file': ('corrupted.pdf', f, 'application/pdf')}
-                data = {
-                    'client_name': 'test_client',
-                    'project_name': 'e2e_corrupted_test'
-                }
-                response = api_client.post(
-                    "/process-drawing",
-                    files=files,
-                    data=data
-                )
+            with open(corrupted_pdf_path, "rb") as f:
+                files = {"drawing_file": ("corrupted.pdf", f, "application/pdf")}
+                data = {"client_name": "test_client", "project_name": "e2e_corrupted_test"}
+                response = api_client.post("/process-drawing", files=files, data=data)
 
             # API might accept or reject corrupted PDF
             if response.status_code == 200:
@@ -162,11 +148,11 @@ class TestErrorHandlingE2E:
         # Create test job
         job = Job(
             job_id=f"e2e_gemini_error_{uuid.uuid4().hex[:8]}",
-            client_name='test_client',
-            project_name='e2e_error_test',
+            client_name="test_client",
+            project_name="e2e_error_test",
             status=JobStatus.PROCESSING,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
 
         storage = LocalStorage()
@@ -174,15 +160,13 @@ class TestErrorHandlingE2E:
 
         # Mock Gemini client to raise rate limit error
         mock_client = MagicMock()
-        mock_client.models.generate_content.side_effect = exceptions.ResourceExhausted(
-            "Rate limit exceeded"
-        )
+        mock_client.models.generate_content.side_effect = exceptions.ResourceExhausted("Rate limit exceeded")
         # Set the private _client attribute directly
         agent._client = mock_client
 
         # Process should handle the error gracefully
         with pytest.raises(Exception) as exc_info:
-            await agent.process({'pages': [{'content': 'test'}]})
+            await agent.process({"pages": [{"content": "test"}]})
 
         # Verify error is properly handled - agent wraps errors in generic message
         assert "Processing failed" in str(exc_info.value) or "unexpected error" in str(exc_info.value).lower()

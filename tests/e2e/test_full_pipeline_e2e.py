@@ -26,12 +26,12 @@ class TestFullPipelineE2E:
         # Create test job
         job = Job(
             job_id=f"e2e_async_{uuid.uuid4().hex[:8]}",
-            client_name='test_client',
-            project_name='e2e_test',
+            client_name="test_client",
+            project_name="e2e_test",
             status=JobStatus.PROCESSING,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            file_path=str(test_pdf_path)
+            file_path=str(test_pdf_path),
         )
 
         # Initialize components
@@ -43,22 +43,22 @@ class TestFullPipelineE2E:
         assert pages is not None, "PDF processing failed"
         assert len(pages) > 0, "No pages extracted from PDF"
         # Convert PageContent objects to dicts for the agent
-        pages_data = [{
-            'page_num': p.page_num,
-            'text': p.text,
-            'dimensions': {'width': p.dimensions.width, 'height': p.dimensions.height}
-        } for p in pages]
+        pages_data = [
+            {
+                "page_num": p.page_num,
+                "text": p.text,
+                "dimensions": {"width": p.dimensions.width, "height": p.dimensions.height},
+            }
+            for p in pages
+        ]
         # Include the pdf_path so the agent can use native PDF upload
-        pdf_result = {
-            'pages': pages_data,
-            'pdf_path': str(test_pdf_path)
-        }
+        pdf_result = {"pages": pages_data, "pdf_path": str(test_pdf_path)}
 
         # Step 2: Extract components with Schedule Agent
         schedule_agent = ScheduleAgentV2(storage, job)
         agent_result = await schedule_agent.process(pdf_result)
 
-        assert 'components' in agent_result, "No components extracted"
+        assert "components" in agent_result, "No components extracted"
 
         # Flatten components from pages structure (EXACTLY like production code in routes.py)
         flattened_components = []
@@ -81,36 +81,35 @@ class TestFullPipelineE2E:
 
         # Step 3: Generate Excel with Excel Generation Agent (pass flattened list like production)
         excel_agent = ExcelGenerationAgent(storage, job)
-        excel_result = await excel_agent.process({
-            "components": flattened_components
-        })
+        excel_result = await excel_agent.process({"components": flattened_components})
 
-        assert excel_result.get('status') == 'completed', f"Excel generation failed: {excel_result}"
-        assert 'file_path' in excel_result, "Excel file path not in result"
-        assert excel_result['file_path'] is not None, "Excel file path is None"
+        assert excel_result.get("status") == "completed", f"Excel generation failed: {excel_result}"
+        assert "file_path" in excel_result, "Excel file path not in result"
+        assert excel_result["file_path"] is not None, "Excel file path is None"
 
         # Step 4: Run Judge Agent for evaluation (like production)
         judge_agent = JudgeAgentV2(storage, job)
 
         # For LocalStorage, convert the storage key to actual file path
         from pathlib import Path
+
         local_output_dir = Path("./local_output").absolute()
-        excel_local_path = local_output_dir / excel_result['file_path']
+        excel_local_path = local_output_dir / excel_result["file_path"]
 
         # Prepare inputs for judge (following routes.py pattern)
         judge_input = {
             "drawing_file": str(test_pdf_path),  # The original PDF path exists
             "context": None,  # No context in this test
             "components": flattened_components,
-            "excel_file": str(excel_local_path) if excel_local_path.exists() else None
+            "excel_file": str(excel_local_path) if excel_local_path.exists() else None,
         }
 
         # Run evaluation
         judge_result = await judge_agent.process(judge_input)
 
         # Verify judge evaluation completed
-        assert 'evaluation' in judge_result, "No evaluation in judge result"
-        evaluation = judge_result['evaluation']
+        assert "evaluation" in judge_result, "No evaluation in judge result"
+        evaluation = judge_result["evaluation"]
 
         # Handle case where evaluation is an error string
         if isinstance(evaluation, str):
@@ -118,20 +117,20 @@ class TestFullPipelineE2E:
             # For now, we'll still pass the test if judge ran but had issues
             # This is common with file upload problems in test environment
         else:
-            assert 'overall_assessment' in evaluation, "No overall assessment in evaluation"
-            assert 'completeness' in evaluation, "No completeness score in evaluation"
-            assert 'correctness' in evaluation, "No correctness score in evaluation"
+            assert "overall_assessment" in evaluation, "No overall assessment in evaluation"
+            assert "completeness" in evaluation, "No completeness score in evaluation"
+            assert "correctness" in evaluation, "No correctness score in evaluation"
 
             print(f"   - Judge Assessment: {evaluation.get('overall_assessment', 'Unknown')}")
 
             # Handle both dict and string formats for scores
-            completeness = evaluation.get('completeness', {})
+            completeness = evaluation.get("completeness", {})
             if isinstance(completeness, dict):
                 print(f"   - Completeness: {completeness.get('score', 'N/A')}/5")
             else:
                 print(f"   - Completeness: {completeness}")
 
-            correctness = evaluation.get('correctness', {})
+            correctness = evaluation.get("correctness", {})
             if isinstance(correctness, dict):
                 print(f"   - Correctness: {correctness.get('score', 'N/A')}/5")
             else:

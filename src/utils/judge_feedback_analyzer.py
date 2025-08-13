@@ -40,7 +40,7 @@ class JudgeFeedbackAnalyzer:
             "correctness": [],
             "context_usage": [],
             "spatial_understanding": [],
-            "false_positives": []
+            "false_positives": [],
         }
 
         for eval_data in evaluations:
@@ -70,9 +70,10 @@ class JudgeFeedbackAnalyzer:
         # Find most problematic categories
         problematic_categories = []
         for category, issues in issue_categories.items():
-            if issues and any("miss" in str(issue).lower() or
-                             "incorrect" in str(issue).lower() or
-                             "wrong" in str(issue).lower() for issue in issues):
+            if issues and any(
+                "miss" in str(issue).lower() or "incorrect" in str(issue).lower() or "wrong" in str(issue).lower()
+                for issue in issues
+            ):
                 problematic_categories.append(category)
 
         return {
@@ -83,7 +84,7 @@ class JudgeFeedbackAnalyzer:
             "problematic_categories": problematic_categories,
             "recommended_improvements": self._generate_recommendations(
                 suggestion_counter, patterns, problematic_categories
-            )
+            ),
         }
 
     def _extract_assessment_level(self, assessment: str) -> str:
@@ -126,7 +127,7 @@ class JudgeFeedbackAnalyzer:
             "context": "Context utilization issues",
             "component id": "Component ID pattern recognition issues",
             "false positive": "False positive detection issues",
-            "annotation": "Annotation parsing issues"
+            "annotation": "Annotation parsing issues",
         }
 
         # Count occurrences of each pattern efficiently
@@ -144,10 +145,7 @@ class JudgeFeedbackAnalyzer:
         return [pattern for pattern, _ in sorted_patterns[:3]]
 
     def _generate_recommendations(
-        self,
-        suggestion_counter: Counter,
-        patterns: list[str],
-        problematic_categories: list[str]
+        self, suggestion_counter: Counter, patterns: list[str], problematic_categories: list[str]
     ) -> list[str]:
         """Generate specific recommendations based on analysis.
 

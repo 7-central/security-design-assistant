@@ -316,7 +316,10 @@ class UsageAnalyzer:
                         'category': 'performance',
                         'priority': 'medium',
                         'title': f'High memory utilization in {func_name}',
-                        'description': f"Average memory utilization: {func_data['avg_memory_utilization_percent']:.1f}%",
+                        'description': (
+                            f"Average memory utilization: "
+                            f"{func_data['avg_memory_utilization_percent']:.1f}%"
+                        ),
                         'action': f'Increase memory from {func_data["current_memory_mb"]}MB'
                     })
 
@@ -449,12 +452,20 @@ class UsageAnalyzer:
                 'total_monthly_invocations': int(summary['avg_daily_invocations'] * 30),
                 'current_monthly_cost': cost_projections['current_monthly'],
                 'peak_concurrency': summary['peak_concurrency'],
-                'total_functions': len([f for f in usage_analysis['functions'] if 'error' not in usage_analysis['functions'][f]])
+                'total_functions': len([
+                    f for f in usage_analysis['functions']
+                    if 'error' not in usage_analysis['functions'][f]
+                ])
             },
             'critical_findings': {
                 'high_priority_issues': len(high_priority_recs),
-                'cost_optimization_potential': f"${cost_projections['scenarios']['optimized']['savings_monthly']:.2f}/month",
-                'performance_issues': len([r for r in usage_analysis['recommendations'] if r.get('category') == 'performance'])
+                'cost_optimization_potential': (
+                    f"${cost_projections['scenarios']['optimized']['savings_monthly']:.2f}/month"
+                ),
+                'performance_issues': len([
+                    r for r in usage_analysis['recommendations']
+                    if r.get('category') == 'performance'
+                ])
             },
             'next_actions': [
                 'Review and implement high-priority recommendations',

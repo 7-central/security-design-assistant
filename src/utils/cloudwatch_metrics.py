@@ -23,7 +23,7 @@ TOKEN_METRICS_NAMESPACE = "SecurityAssistant/TokenUsage"
 
 # Cost tracking constants (Gemini API pricing per 1M tokens)
 GEMINI_FLASH_COST_PER_MILLION = 0.075  # $0.075 per 1M tokens
-GEMINI_PRO_COST_PER_MILLION = 2.50    # $2.50 per 1M tokens
+GEMINI_PRO_COST_PER_MILLION = 2.50  # $2.50 per 1M tokens
 
 
 class CloudWatchMetrics:
@@ -46,7 +46,7 @@ class CloudWatchMetrics:
             environment: Environment name (dev, staging, prod)
         """
         self.environment = environment
-        self.cloudwatch = boto3.client('cloudwatch')
+        self.cloudwatch = boto3.client("cloudwatch")
 
     def _create_dimensions(self, **dimensions) -> list[dict[str, str]]:
         """
@@ -58,17 +58,13 @@ class CloudWatchMetrics:
         Returns:
             List of dimension dictionaries
         """
-        dims = [{'Name': 'Environment', 'Value': self.environment}]
+        dims = [{"Name": "Environment", "Value": self.environment}]
         for name, value in dimensions.items():
             if value is not None:
-                dims.append({'Name': name, 'Value': str(value)})
+                dims.append({"Name": name, "Value": str(value)})
         return dims
 
-    def _put_metric_data(
-        self,
-        namespace: str,
-        metrics: list[dict[str, Any]]
-    ) -> bool:
+    def _put_metric_data(self, namespace: str, metrics: list[dict[str, Any]]) -> bool:
         """
         Send metrics data to CloudWatch.
 
@@ -82,11 +78,8 @@ class CloudWatchMetrics:
         try:
             # CloudWatch accepts max 20 metrics per call
             for i in range(0, len(metrics), 20):
-                batch = metrics[i:i+20]
-                self.cloudwatch.put_metric_data(
-                    Namespace=namespace,
-                    MetricData=batch
-                )
+                batch = metrics[i : i + 20]
+                self.cloudwatch.put_metric_data(Namespace=namespace, MetricData=batch)
 
             logger.debug(f"Published {len(metrics)} metrics to {namespace}")
             return True
@@ -105,7 +98,7 @@ class CloudWatchMetrics:
         duration_seconds: float,
         status: str = "completed",
         client_name: str | None = None,
-        project_name: str | None = None
+        project_name: str | None = None,
     ) -> bool:
         """
         Track job processing duration by pipeline stage.
@@ -121,40 +114,39 @@ class CloudWatchMetrics:
         Returns:
             True if metric was published successfully
         """
-        dimensions = self._create_dimensions(
-            Stage=stage_name,
-            Status=status,
-            Client=client_name,
-            Project=project_name
-        )
+        dimensions = self._create_dimensions(Stage=stage_name, Status=status, Client=client_name, Project=project_name)
 
         metrics = [
             {
-                'MetricName': 'ProcessingDuration',
-                'Value': duration_seconds,
-                'Unit': 'Seconds',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "ProcessingDuration",
+                "Value": duration_seconds,
+                "Unit": "Seconds",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'StageCompletion',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            }
+                "MetricName": "StageCompletion",
+                "Value": 1,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
+            },
         ]
 
         # Log structured metric data
-        logger.info(json.dumps({
-            "event_type": "custom_metric",
-            "metric_type": "processing_duration",
-            "job_id": job_id,
-            "stage_name": stage_name,
-            "duration_seconds": duration_seconds,
-            "status": status,
-            "timestamp": int(time.time())
-        }))
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "custom_metric",
+                    "metric_type": "processing_duration",
+                    "job_id": job_id,
+                    "stage_name": stage_name,
+                    "duration_seconds": duration_seconds,
+                    "status": status,
+                    "timestamp": int(time.time()),
+                }
+            )
+        )
 
         return self._put_metric_data(PIPELINE_METRICS_NAMESPACE, metrics)
 
@@ -165,7 +157,7 @@ class CloudWatchMetrics:
         input_tokens: int,
         output_tokens: int,
         operation: str,
-        estimated_cost: float | None = None
+        estimated_cost: float | None = None,
     ) -> bool:
         """
         Track Gemini API token usage and estimated costs.
@@ -193,65 +185,61 @@ class CloudWatchMetrics:
                 # Default to flash pricing
                 estimated_cost = (total_tokens / 1_000_000) * GEMINI_FLASH_COST_PER_MILLION
 
-        dimensions = self._create_dimensions(
-            Model=model_name,
-            Operation=operation
-        )
+        dimensions = self._create_dimensions(Model=model_name, Operation=operation)
 
         metrics = [
             {
-                'MetricName': 'InputTokens',
-                'Value': input_tokens,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "InputTokens",
+                "Value": input_tokens,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'OutputTokens',
-                'Value': output_tokens,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "OutputTokens",
+                "Value": output_tokens,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'TotalTokens',
-                'Value': total_tokens,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "TotalTokens",
+                "Value": total_tokens,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'EstimatedCost',
-                'Value': estimated_cost,
-                'Unit': 'None',  # Cost in USD
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            }
+                "MetricName": "EstimatedCost",
+                "Value": estimated_cost,
+                "Unit": "None",  # Cost in USD
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
+            },
         ]
 
         # Log structured token usage
-        logger.info(json.dumps({
-            "event_type": "custom_metric",
-            "metric_type": "token_usage",
-            "job_id": job_id,
-            "model_name": model_name,
-            "operation": operation,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "estimated_cost_usd": round(estimated_cost, 6),
-            "timestamp": int(time.time())
-        }))
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "custom_metric",
+                    "metric_type": "token_usage",
+                    "job_id": job_id,
+                    "model_name": model_name,
+                    "operation": operation,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                    "estimated_cost_usd": round(estimated_cost, 6),
+                    "timestamp": int(time.time()),
+                }
+            )
+        )
 
         return self._put_metric_data(TOKEN_METRICS_NAMESPACE, metrics)
 
     def track_stage_success_failure(
-        self,
-        job_id: str,
-        stage_name: str,
-        success: bool,
-        error_type: str | None = None,
-        retry_count: int = 0
+        self, job_id: str, stage_name: str, success: bool, error_type: str | None = None, retry_count: int = 0
     ) -> bool:
         """
         Track success/failure rates for each processing stage.
@@ -267,42 +255,46 @@ class CloudWatchMetrics:
             True if metric was published successfully
         """
         dimensions = self._create_dimensions(
-            Stage=stage_name,
-            Success=str(success).lower(),
-            ErrorType=error_type if not success else None
+            Stage=stage_name, Success=str(success).lower(), ErrorType=error_type if not success else None
         )
 
         metrics = [
             {
-                'MetricName': 'StageSuccess' if success else 'StageFailure',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "StageSuccess" if success else "StageFailure",
+                "Value": 1,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             }
         ]
 
         # Add retry metrics if applicable
         if retry_count > 0:
-            metrics.append({
-                'MetricName': 'StageRetries',
-                'Value': retry_count,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "StageRetries",
+                    "Value": retry_count,
+                    "Unit": "Count",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         # Log structured success/failure data
-        logger.info(json.dumps({
-            "event_type": "custom_metric",
-            "metric_type": "stage_outcome",
-            "job_id": job_id,
-            "stage_name": stage_name,
-            "success": success,
-            "error_type": error_type,
-            "retry_count": retry_count,
-            "timestamp": int(time.time())
-        }))
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "custom_metric",
+                    "metric_type": "stage_outcome",
+                    "job_id": job_id,
+                    "stage_name": stage_name,
+                    "success": success,
+                    "error_type": error_type,
+                    "retry_count": retry_count,
+                    "timestamp": int(time.time()),
+                }
+            )
+        )
 
         return self._put_metric_data(PIPELINE_METRICS_NAMESPACE, metrics)
 
@@ -313,7 +305,7 @@ class CloudWatchMetrics:
         memory_used_mb: int | None = None,
         success: bool = True,
         error_type: str | None = None,
-        job_id: str | None = None
+        job_id: str | None = None,
     ) -> bool:
         """
         Track Lambda function performance metrics.
@@ -330,45 +322,47 @@ class CloudWatchMetrics:
             True if metric was published successfully
         """
         dimensions = self._create_dimensions(
-            FunctionName=function_name,
-            Success=str(success).lower(),
-            ErrorType=error_type if not success else None
+            FunctionName=function_name, Success=str(success).lower(), ErrorType=error_type if not success else None
         )
 
         metrics = [
             {
-                'MetricName': 'ExecutionTime',
-                'Value': execution_time,
-                'Unit': 'Seconds',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "ExecutionTime",
+                "Value": execution_time,
+                "Unit": "Seconds",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'Invocations',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            }
+                "MetricName": "Invocations",
+                "Value": 1,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
+            },
         ]
 
         if memory_used_mb:
-            metrics.append({
-                'MetricName': 'MemoryUsage',
-                'Value': memory_used_mb,
-                'Unit': 'None',  # MB
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "MemoryUsage",
+                    "Value": memory_used_mb,
+                    "Unit": "None",  # MB
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         if not success:
-            metrics.append({
-                'MetricName': 'Errors',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "Errors",
+                    "Value": 1,
+                    "Unit": "Count",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         return self._put_metric_data(LAMBDA_METRICS_NAMESPACE, metrics)
 
@@ -379,7 +373,7 @@ class CloudWatchMetrics:
         status_code: int,
         response_time: float,
         request_size_bytes: int | None = None,
-        response_size_bytes: int | None = None
+        response_size_bytes: int | None = None,
     ) -> bool:
         """
         Track API Gateway request metrics.
@@ -395,72 +389,73 @@ class CloudWatchMetrics:
         Returns:
             True if metric was published successfully
         """
-        dimensions = self._create_dimensions(
-            Endpoint=endpoint,
-            Method=method,
-            StatusCode=str(status_code)
-        )
+        dimensions = self._create_dimensions(Endpoint=endpoint, Method=method, StatusCode=str(status_code))
 
         metrics = [
             {
-                'MetricName': 'ResponseTime',
-                'Value': response_time,
-                'Unit': 'Seconds',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "ResponseTime",
+                "Value": response_time,
+                "Unit": "Seconds",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             },
             {
-                'MetricName': 'RequestCount',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            }
+                "MetricName": "RequestCount",
+                "Value": 1,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
+            },
         ]
 
         if request_size_bytes:
-            metrics.append({
-                'MetricName': 'RequestSize',
-                'Value': request_size_bytes,
-                'Unit': 'Bytes',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "RequestSize",
+                    "Value": request_size_bytes,
+                    "Unit": "Bytes",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         if response_size_bytes:
-            metrics.append({
-                'MetricName': 'ResponseSize',
-                'Value': response_size_bytes,
-                'Unit': 'Bytes',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "ResponseSize",
+                    "Value": response_size_bytes,
+                    "Unit": "Bytes",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         # Track success/error rates
         if 200 <= status_code < 400:
-            metrics.append({
-                'MetricName': 'SuccessfulRequests',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "SuccessfulRequests",
+                    "Value": 1,
+                    "Unit": "Count",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
         else:
-            metrics.append({
-                'MetricName': 'ErrorRequests',
-                'Value': 1,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "ErrorRequests",
+                    "Value": 1,
+                    "Unit": "Count",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         return self._put_metric_data(API_METRICS_NAMESPACE, metrics)
 
     def track_queue_metrics(
-        self,
-        queue_name: str,
-        approximate_message_count: int,
-        approximate_message_age_seconds: int | None = None
+        self, queue_name: str, approximate_message_count: int, approximate_message_age_seconds: int | None = None
     ) -> bool:
         """
         Track SQS queue depth and message age metrics.
@@ -477,22 +472,24 @@ class CloudWatchMetrics:
 
         metrics = [
             {
-                'MetricName': 'QueueDepth',
-                'Value': approximate_message_count,
-                'Unit': 'Count',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
+                "MetricName": "QueueDepth",
+                "Value": approximate_message_count,
+                "Unit": "Count",
+                "Dimensions": dimensions,
+                "Timestamp": datetime.utcnow(),
             }
         ]
 
         if approximate_message_age_seconds is not None:
-            metrics.append({
-                'MetricName': 'OldestMessageAge',
-                'Value': approximate_message_age_seconds,
-                'Unit': 'Seconds',
-                'Dimensions': dimensions,
-                'Timestamp': datetime.utcnow()
-            })
+            metrics.append(
+                {
+                    "MetricName": "OldestMessageAge",
+                    "Value": approximate_message_age_seconds,
+                    "Unit": "Seconds",
+                    "Dimensions": dimensions,
+                    "Timestamp": datetime.utcnow(),
+                }
+            )
 
         return self._put_metric_data(METRICS_NAMESPACE, metrics)
 
@@ -511,19 +508,19 @@ class CloudWatchMetrics:
         success_count = 0
 
         for metric_data in metrics_batch:
-            metric_type = metric_data.pop('metric_type', None)
+            metric_type = metric_data.pop("metric_type", None)
 
-            if metric_type == 'processing_duration':
+            if metric_type == "processing_duration":
                 success = self.track_job_processing_duration(**metric_data)
-            elif metric_type == 'token_usage':
+            elif metric_type == "token_usage":
                 success = self.track_gemini_token_usage(**metric_data)
-            elif metric_type == 'stage_outcome':
+            elif metric_type == "stage_outcome":
                 success = self.track_stage_success_failure(**metric_data)
-            elif metric_type == 'lambda_metrics':
+            elif metric_type == "lambda_metrics":
                 success = self.track_lambda_metrics(**metric_data)
-            elif metric_type == 'api_metrics':
+            elif metric_type == "api_metrics":
                 success = self.track_api_metrics(**metric_data)
-            elif metric_type == 'queue_metrics':
+            elif metric_type == "queue_metrics":
                 success = self.track_queue_metrics(**metric_data)
             else:
                 logger.warning(f"Unknown metric type: {metric_type}")

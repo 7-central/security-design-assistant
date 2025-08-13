@@ -48,7 +48,7 @@ async def handle_stage_with_metrics(
     client_name: str,
     project_name: str,
     *args,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """
     Handle a processing stage with both error handling and metrics tracking.
@@ -68,20 +68,13 @@ async def handle_stage_with_metrics(
     Returns:
         Stage function result
     """
-    metrics = get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
+    metrics = get_metrics_client(os.getenv("ENVIRONMENT", "dev"))
     stage_start_time = time.time()
 
     try:
         # Execute stage with error handling
         result = await handle_processing_stage(
-            stage_name,
-            stage_func,
-            job_id,
-            storage,
-            context,
-            start_time,
-            *args,
-            **kwargs
+            stage_name, stage_func, job_id, storage, context, start_time, *args, **kwargs
         )
 
         # Track successful completion
@@ -97,11 +90,10 @@ async def handle_stage_with_metrics(
         # Track failure
         stage_duration = time.time() - stage_start_time
         error_type = type(e).__name__
-        metrics.track_job_processing_duration(
-            job_id, stage_name, stage_duration, "failed", client_name, project_name
-        )
+        metrics.track_job_processing_duration(job_id, stage_name, stage_duration, "failed", client_name, project_name)
         metrics.track_stage_success_failure(job_id, stage_name, False, error_type)
         raise
+
 
 # Lambda timeout detection (15 minutes = 900 seconds)
 LAMBDA_TIMEOUT = 900
@@ -135,19 +127,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # Initialize storage and metrics
     storage = StorageManager.get_storage()
-    get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
+    get_metrics_client(os.getenv("ENVIRONMENT", "dev"))
     processed_records = []
     error_count = 0
 
     try:
-        for record in event.get('Records', []):
+        for record in event.get("Records", []):
             job_id = "unknown"
             correlation_id = create_correlation_id()
 
             try:
                 # Parse SQS message
-                message_body = json.loads(record['body'])
-                job_id = message_body['job_id']
+                message_body = json.loads(record["body"])
+                job_id = message_body["job_id"]
                 correlation_id = create_correlation_id(job_id)
 
                 logger.info(f"Processing job {job_id} with correlation ID {correlation_id}")
@@ -157,27 +149,36 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                     check_lambda_timeout(context, start_time, TIMEOUT_BUFFER, job_id)
                 except TimeoutApproachingError:
                     logger.warning(f"Approaching timeout for job {job_id}, saving progress and exiting")
-                    await_sync(update_job_status(
-                        storage, job_id,
-                        JobStatus.PROCESSING.value,
-                        {"timeout_detected": True, "processing_interrupted": True, "correlation_id": correlation_id}
-                    ))
+                    await_sync(
+                        update_job_status(
+                            storage,
+                            job_id,
+                            JobStatus.PROCESSING.value,
+                            {
+                                "timeout_detected": True,
+                                "processing_interrupted": True,
+                                "correlation_id": correlation_id,
+                            },
+                        )
+                    )
                     break
 
                 # Check memory usage
                 check_memory_usage(85.0, job_id)
 
                 # Process the job with enhanced error handling
-                result = await_sync(process_job_with_enhanced_handling(
-                    storage, message_body, context, start_time, correlation_id
-                ))
+                result = await_sync(
+                    process_job_with_enhanced_handling(storage, message_body, context, start_time, correlation_id)
+                )
 
-                processed_records.append({
-                    'job_id': job_id,
-                    'status': result.get('status', 'completed'),
-                    'message': result.get('message', 'Processing completed'),
-                    'correlation_id': correlation_id
-                })
+                processed_records.append(
+                    {
+                        "job_id": job_id,
+                        "status": result.get("status", "completed"),
+                        "message": result.get("message", "Processing completed"),
+                        "correlation_id": correlation_id,
+                    }
+                )
 
             except Exception as e:
                 error_count += 1
@@ -185,78 +186,49 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 # Enhanced error logging
                 log_structured_error(
                     e,
-                    {
-                        "sqs_record": record,
-                        "processing_stage": "message_parsing",
-                        "function_name": function_name
-                    },
+                    {"sqs_record": record, "processing_stage": "message_parsing", "function_name": function_name},
                     correlation_id,
-                    job_id
+                    job_id,
                 )
 
-                processed_records.append({
-                    'job_id': job_id,
-                    'status': 'failed',
-                    'error': str(e),
-                    'correlation_id': correlation_id
-                })
+                processed_records.append(
+                    {"job_id": job_id, "status": "failed", "error": str(e), "correlation_id": correlation_id}
+                )
 
         # Log execution metrics
         execution_time = time.time() - start_time
         success = error_count == 0
 
-        log_lambda_metrics(
-            function_name,
-            execution_time,
-            success=success,
-            error_count=error_count
-        )
+        log_lambda_metrics(function_name, execution_time, success=success, error_count=error_count)
 
         return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'processed_records': len(processed_records),
-                'results': processed_records,
-                'execution_time': execution_time,
-                'success': success
-            })
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "processed_records": len(processed_records),
+                    "results": processed_records,
+                    "execution_time": execution_time,
+                    "success": success,
+                }
+            ),
         }
 
     except Exception as e:
         # Catch-all error handler
         execution_time = time.time() - start_time
 
-        log_structured_error(
-            e,
-            {
-                "event": event,
-                "function_name": function_name,
-                "execution_time": execution_time
-            }
-        )
+        log_structured_error(e, {"event": event, "function_name": function_name, "execution_time": execution_time})
 
-        log_lambda_metrics(
-            function_name,
-            execution_time,
-            success=False,
-            error_count=1
-        )
+        log_lambda_metrics(function_name, execution_time, success=False, error_count=1)
 
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': 'Internal processing error',
-                'execution_time': execution_time
-            })
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal processing error", "execution_time": execution_time}),
         }
 
 
 async def process_job_with_enhanced_handling(
-    storage,
-    message_body: dict[str, Any],
-    context: Any,
-    start_time: float,
-    correlation_id: str
+    storage, message_body: dict[str, Any], context: Any, start_time: float, correlation_id: str
 ) -> dict[str, Any]:
     """
     Process a single drawing analysis job with enhanced error handling.
@@ -271,7 +243,7 @@ async def process_job_with_enhanced_handling(
     Returns:
         Processing results
     """
-    job_id = message_body['job_id']
+    job_id = message_body["job_id"]
 
     try:
         # Use the stage-based processing approach
@@ -281,23 +253,15 @@ async def process_job_with_enhanced_handling(
         # Log final error
         log_structured_error(
             e,
-            {
-                "job_id": job_id,
-                "message_body": message_body,
-                "processing_stage": "job_processing"
-            },
+            {"job_id": job_id, "message_body": message_body, "processing_stage": "job_processing"},
             correlation_id,
-            job_id
+            job_id,
         )
         raise
 
 
 async def process_job_stages(
-    storage,
-    message_body: dict[str, Any],
-    context: Any,
-    start_time: float,
-    correlation_id: str
+    storage, message_body: dict[str, Any], context: Any, start_time: float, correlation_id: str
 ) -> dict[str, Any]:
     """
     Process job using stage-based approach with comprehensive error handling.
@@ -312,9 +276,9 @@ async def process_job_stages(
     Returns:
         Processing results
     """
-    job_id = message_body['job_id']
-    client_name = message_body['client_name']
-    project_name = message_body['project_name']
+    job_id = message_body["job_id"]
+    client_name = message_body["client_name"]
+    project_name = message_body["project_name"]
 
     # Stage 1: PDF Processing
     pdf_result = await handle_stage_with_metrics(
@@ -326,12 +290,12 @@ async def process_job_stages(
         start_time,
         client_name,
         project_name,
-        message_body
+        message_body,
     )
 
     # Stage 2: Context Processing (if needed)
     context_result = None
-    if message_body.get('context_s3_key') or message_body.get('context_text'):
+    if message_body.get("context_s3_key") or message_body.get("context_text"):
         context_result = await handle_stage_with_metrics(
             "context_processing",
             process_context_stage,
@@ -342,7 +306,7 @@ async def process_job_stages(
             client_name,
             project_name,
             message_body,
-            pdf_result['job']
+            pdf_result["job"],
         )
 
     # Stage 3: Component Extraction (Schedule Agent)
@@ -355,8 +319,8 @@ async def process_job_stages(
         start_time,
         client_name,
         project_name,
-        pdf_result['job'],
-        pdf_result['pages']
+        pdf_result["job"],
+        pdf_result["pages"],
     )
 
     # Stage 4: Excel Generation
@@ -369,8 +333,8 @@ async def process_job_stages(
         start_time,
         client_name,
         project_name,
-        pdf_result['job'],
-        schedule_result['flattened_components']
+        pdf_result["job"],
+        schedule_result["flattened_components"],
     )
 
     # Stage 5: Judge Evaluation
@@ -383,28 +347,36 @@ async def process_job_stages(
         start_time,
         client_name,
         project_name,
-        pdf_result['job'],
+        pdf_result["job"],
         {
-            'context_result': context_result,
-            'flattened_components': schedule_result['flattened_components'],
-            'excel_file_path': excel_result.get('file_path'),
-            'pdf_file_path': pdf_result['tmp_file_path']
-        }
+            "context_result": context_result,
+            "flattened_components": schedule_result["flattened_components"],
+            "excel_file_path": excel_result.get("file_path"),
+            "pdf_file_path": pdf_result["tmp_file_path"],
+        },
     )
 
     # Finalize job
     total_processing_time = time.time() - start_time
-    job = pdf_result['job']
+    job = pdf_result["job"]
     job.mark_completed(processing_time=total_processing_time)
 
     final_job_data = job.to_dict()
-    final_job_data.update({
-        "current_stage": "completed",
-        "stages_completed": ["pdf_processing", "context_processing", "drawing_analysis", "excel_generation", "evaluation"],
-        "completed_at": int(time.time()),
-        "total_processing_time_seconds": round(total_processing_time, 2),
-        "correlation_id": correlation_id
-    })
+    final_job_data.update(
+        {
+            "current_stage": "completed",
+            "stages_completed": [
+                "pdf_processing",
+                "context_processing",
+                "drawing_analysis",
+                "excel_generation",
+                "evaluation",
+            ],
+            "completed_at": int(time.time()),
+            "total_processing_time_seconds": round(total_processing_time, 2),
+            "correlation_id": correlation_id,
+        }
+    )
 
     await storage.save_job_status(job_id, final_job_data)
 
@@ -413,17 +385,17 @@ async def process_job_stages(
     return {
         "status": "completed",
         "processing_time": total_processing_time,
-        "components_found": len(schedule_result['flattened_components']),
-        "excel_generated": excel_result.get('status') == 'completed'
+        "components_found": len(schedule_result["flattened_components"]),
+        "excel_generated": excel_result.get("status") == "completed",
     }
 
 
 async def process_pdf_stage(message_body: dict[str, Any]) -> dict[str, Any]:
     """Process PDF extraction stage."""
-    job_id = message_body['job_id']
-    drawing_s3_key = message_body['drawing_s3_key']
-    client_name = message_body['client_name']
-    project_name = message_body['project_name']
+    job_id = message_body["job_id"]
+    drawing_s3_key = message_body["drawing_s3_key"]
+    client_name = message_body["client_name"]
+    project_name = message_body["project_name"]
 
     # Get storage from global (set in handler)
     storage = StorageManager.get_storage()
@@ -457,21 +429,19 @@ async def process_pdf_stage(message_body: dict[str, Any]) -> dict[str, Any]:
             updated_at=datetime.utcnow(),
         )
 
-        job.update_metadata({
-            "file_name": drawing_s3_key.split('/')[-1],
-            "file_size_mb": round(len(drawing_content) / (1024 * 1024), 2),
-            "total_pages": metadata.total_pages,
-            "pdf_type": metadata.pdf_type.value,
-            "pdf_processing_time_seconds": round(pdf_processing_time, 2),
-        })
+        job.update_metadata(
+            {
+                "file_name": drawing_s3_key.split("/")[-1],
+                "file_size_mb": round(len(drawing_content) / (1024 * 1024), 2),
+                "total_pages": metadata.total_pages,
+                "pdf_type": metadata.pdf_type.value,
+                "pdf_processing_time_seconds": round(pdf_processing_time, 2),
+            }
+        )
 
         job.update_processing_results({"pages": [page.to_dict() for page in pages]})
 
-        return {
-            'job': job,
-            'pages': [page.to_dict() for page in pages],
-            'tmp_file_path': tmp_file_path
-        }
+        return {"job": job, "pages": [page.to_dict() for page in pages], "tmp_file_path": tmp_file_path}
 
     except Exception:
         # Clean up temp file on error
@@ -482,8 +452,8 @@ async def process_pdf_stage(message_body: dict[str, Any]) -> dict[str, Any]:
 
 async def process_context_stage(message_body: dict[str, Any], job: Job) -> dict[str, Any]:
     """Process context analysis stage."""
-    context_s3_key = message_body.get('context_s3_key')
-    context_text = message_body.get('context_text')
+    context_s3_key = message_body.get("context_s3_key")
+    context_text = message_body.get("context_text")
 
     storage = StorageManager.get_storage()
 
@@ -493,22 +463,22 @@ async def process_context_stage(message_body: dict[str, Any], job: Job) -> dict[
 
     if context_s3_key:
         context_file_content = await storage.get_file(context_s3_key)
-        context_filename = context_s3_key.split('/')[-1]
+        context_filename = context_s3_key.split("/")[-1]
 
         # Determine mime type from filename
-        if context_filename.lower().endswith('.docx'):
-            context_mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        elif context_filename.lower().endswith('.pdf'):
-            context_mime_type = 'application/pdf'
+        if context_filename.lower().endswith(".docx"):
+            context_mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif context_filename.lower().endswith(".pdf"):
+            context_mime_type = "application/pdf"
         else:
-            context_mime_type = 'text/plain'
+            context_mime_type = "text/plain"
 
     # Classify context type
     context_classification = classify_context(
         context_file_content=context_file_content,
         context_text=context_text,
         mime_type=context_mime_type,
-        filename=context_filename
+        filename=context_filename,
     )
 
     if not context_classification:
@@ -524,10 +494,7 @@ async def process_context_stage(message_body: dict[str, Any], job: Job) -> dict[
 
     if context_file_content:
         # Save context file temporarily
-        with tempfile.NamedTemporaryFile(
-            suffix=f".{context_classification['type']}",
-            delete=False
-        ) as tmp_context:
+        with tempfile.NamedTemporaryFile(suffix=f".{context_classification['type']}", delete=False) as tmp_context:
             tmp_context.write(context_file_content)
             context_input["context_file_path"] = tmp_context.name
     else:
@@ -536,16 +503,11 @@ async def process_context_stage(message_body: dict[str, Any], job: Job) -> dict[
     try:
         # Process context with timeout and retry logic
         context_result = await retry_with_exponential_backoff(
-            context_agent.process,
-            context_input,
-            max_retries=2,
-            base_delay=5.0
+            context_agent.process, context_input, max_retries=2, base_delay=5.0
         )
 
         # Update job with context results
-        job.update_processing_results({
-            "context": context_result
-        })
+        job.update_processing_results({"context": context_result})
 
         logger.info(f"Context processing completed for job {job.job_id}")
         return context_result
@@ -571,10 +533,7 @@ async def process_schedule_agent_stage(job: Job, pages: list) -> dict[str, Any]:
         # Process with Schedule Agent using retry logic
         schedule_input = {"pages": pages}
         agent_result = await retry_with_exponential_backoff(
-            schedule_agent.process,
-            schedule_input,
-            max_retries=3,
-            base_delay=10.0
+            schedule_agent.process, schedule_input, max_retries=3, base_delay=10.0
         )
 
         # Flatten components from pages structure
@@ -598,20 +557,19 @@ async def process_schedule_agent_stage(job: Job, pages: list) -> dict[str, Any]:
                     flattened_components.extend(page["components"])
 
         # Update job status after schedule agent
-        job.update_processing_results({
-            "schedule_agent": {
-                "completed": True,
-                "components": agent_result,
-                "flattened_components": flattened_components
+        job.update_processing_results(
+            {
+                "schedule_agent": {
+                    "completed": True,
+                    "components": agent_result,
+                    "flattened_components": flattened_components,
+                }
             }
-        })
+        )
 
         logger.info(f"Schedule agent completed for job {job.job_id}, found {len(flattened_components)} components")
 
-        return {
-            "agent_result": agent_result,
-            "flattened_components": flattened_components
-        }
+        return {"agent_result": agent_result, "flattened_components": flattened_components}
 
     except ScheduleAgentError as e:
         logger.error(f"Schedule agent error for job {job.job_id}: {e}")
@@ -629,26 +587,23 @@ async def process_excel_generation_stage(job: Job, flattened_components: list) -
 
     # Process with Excel Generation Agent using retry logic
     excel_result = await retry_with_exponential_backoff(
-        excel_agent.process,
-        {"components": flattened_components},
-        max_retries=2,
-        base_delay=5.0
+        excel_agent.process, {"components": flattened_components}, max_retries=2, base_delay=5.0
     )
 
     # Update job with Excel generation results
-    job.update_processing_results({
-        "excel_generation": {
-            "completed": excel_result.get("status") == "completed",
-            "file_path": excel_result.get("file_path"),
-            "summary": excel_result.get("summary", {})
+    job.update_processing_results(
+        {
+            "excel_generation": {
+                "completed": excel_result.get("status") == "completed",
+                "file_path": excel_result.get("file_path"),
+                "summary": excel_result.get("summary", {}),
+            }
         }
-    })
+    )
 
     # Update job metadata with Excel file path
     if excel_result.get("file_path"):
-        job.update_metadata({
-            "excel_file_path": excel_result.get("file_path")
-        })
+        job.update_metadata({"excel_file_path": excel_result.get("file_path")})
 
     logger.info(f"Excel generation completed for job {job.job_id}")
     return excel_result
@@ -663,25 +618,23 @@ async def process_judge_evaluation_stage(job: Job, inputs: dict) -> dict[str, An
 
         # Prepare inputs for judge
         judge_input = {
-            "drawing_file": str(inputs['pdf_file_path']) if inputs['pdf_file_path'] and inputs['pdf_file_path'].exists() else None,
-            "context": inputs['context_result'].get("context") if inputs['context_result'] else None,
-            "components": inputs['flattened_components'],
-            "excel_file": inputs['excel_file_path']
+            "drawing_file": str(inputs["pdf_file_path"])
+            if inputs["pdf_file_path"] and inputs["pdf_file_path"].exists()
+            else None,
+            "context": inputs["context_result"].get("context") if inputs["context_result"] else None,
+            "components": inputs["flattened_components"],
+            "excel_file": inputs["excel_file_path"],
         }
 
         # Run evaluation with retry logic
         judge_result = await retry_with_exponential_backoff(
-            judge_agent.process,
-            judge_input,
-            max_retries=2,
-            base_delay=5.0
+            judge_agent.process, judge_input, max_retries=2, base_delay=5.0
         )
 
         # Update job with evaluation results
-        job.update_processing_results({
-            "evaluation": judge_result.get("evaluation", {}),
-            "evaluation_metadata": judge_result.get("metadata", {})
-        })
+        job.update_processing_results(
+            {"evaluation": judge_result.get("evaluation", {}), "evaluation_metadata": judge_result.get("metadata", {})}
+        )
 
         # Log evaluation summary
         evaluation = judge_result.get("evaluation", {})
@@ -693,17 +646,12 @@ async def process_judge_evaluation_stage(job: Job, inputs: dict) -> dict[str, An
     except Exception as e:
         # Log but don't fail the job if judge evaluation fails
         logger.error(f"Judge evaluation failed for job {job.job_id}: {e}")
-        job.update_processing_results({
-            "evaluation": {
-                "overall_assessment": "Evaluation failed",
-                "error": str(e)
-            }
-        })
+        job.update_processing_results({"evaluation": {"overall_assessment": "Evaluation failed", "error": str(e)}})
         return {"evaluation": {"overall_assessment": "Evaluation failed", "error": str(e)}}
     finally:
         # Clean up PDF temp file
-        if inputs['pdf_file_path'] and inputs['pdf_file_path'].exists():
-            inputs['pdf_file_path'].unlink()
+        if inputs["pdf_file_path"] and inputs["pdf_file_path"].exists():
+            inputs["pdf_file_path"].unlink()
 
 
 async def process_job(storage, message_body: dict[str, Any], context: Any, start_time: float) -> dict[str, Any]:
@@ -719,23 +667,21 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
     Returns:
         Processing results
     """
-    job_id = message_body['job_id']
-    message_body['company_client_job']
-    drawing_s3_key = message_body['drawing_s3_key']
-    context_s3_key = message_body.get('context_s3_key')
-    context_text = message_body.get('context_text')
-    client_name = message_body['client_name']
-    project_name = message_body['project_name']
+    job_id = message_body["job_id"]
+    message_body["company_client_job"]
+    drawing_s3_key = message_body["drawing_s3_key"]
+    context_s3_key = message_body.get("context_s3_key")
+    context_text = message_body.get("context_text")
+    client_name = message_body["client_name"]
+    project_name = message_body["project_name"]
 
     try:
         # Update job status to processing
         await update_job_status(
-            storage, job_id,
+            storage,
+            job_id,
             JobStatus.PROCESSING.value,
-            {
-                "current_stage": "pdf_processing",
-                "processing_started_at": int(time.time())
-            }
+            {"current_stage": "pdf_processing", "processing_started_at": int(time.time())},
         )
 
         # Step 1: Download and process PDF
@@ -765,7 +711,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                 "total_pages": metadata.total_pages,
                 "pdf_type": metadata.pdf_type.value,
                 "pdf_processing_time_seconds": round(pdf_processing_time, 2),
-                "pages": [page.to_dict() for page in pages]
+                "pages": [page.to_dict() for page in pages],
             }
 
             # Create Job instance for agent coordination
@@ -778,11 +724,13 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                 updated_at=datetime.utcnow(),
             )
 
-            job.update_metadata({
-                "file_name": drawing_s3_key.split('/')[-1],
-                "file_size_mb": round(len(drawing_content) / (1024 * 1024), 2),
-                **{k: v for k, v in pdf_results.items() if k != "pages"}
-            })
+            job.update_metadata(
+                {
+                    "file_name": drawing_s3_key.split("/")[-1],
+                    "file_size_mb": round(len(drawing_content) / (1024 * 1024), 2),
+                    **{k: v for k, v in pdf_results.items() if k != "pages"},
+                }
+            )
 
             job.update_processing_results({"pages": pdf_results["pages"]})
 
@@ -797,8 +745,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                 logger.info(f"Processing context for job {job_id}")
 
                 await update_job_status(
-                    storage, job_id, JobStatus.PROCESSING.value,
-                    {"current_stage": "context_processing"}
+                    storage, job_id, JobStatus.PROCESSING.value, {"current_stage": "context_processing"}
                 )
 
                 try:
@@ -808,22 +755,24 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
 
                     if context_s3_key:
                         context_file_content = await storage.get_file(context_s3_key)
-                        context_filename = context_s3_key.split('/')[-1]
+                        context_filename = context_s3_key.split("/")[-1]
 
                         # Determine mime type from filename
-                        if context_filename.lower().endswith('.docx'):
-                            context_mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                        elif context_filename.lower().endswith('.pdf'):
-                            context_mime_type = 'application/pdf'
+                        if context_filename.lower().endswith(".docx"):
+                            context_mime_type = (
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                        elif context_filename.lower().endswith(".pdf"):
+                            context_mime_type = "application/pdf"
                         else:
-                            context_mime_type = 'text/plain'
+                            context_mime_type = "text/plain"
 
                     # Classify context type
                     context_classification = classify_context(
                         context_file_content=context_file_content,
                         context_text=context_text,
                         mime_type=context_mime_type,
-                        filename=context_filename
+                        filename=context_filename,
                     )
 
                     if context_classification:
@@ -838,8 +787,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                         if context_file_content:
                             # Save context file temporarily
                             with tempfile.NamedTemporaryFile(
-                                suffix=f".{context_classification['type']}",
-                                delete=False
+                                suffix=f".{context_classification['type']}", delete=False
                             ) as tmp_context:
                                 tmp_context.write(context_file_content)
                                 context_input["context_file_path"] = tmp_context.name
@@ -848,16 +796,15 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
 
                         # Process context with timeout
                         import asyncio
+
                         try:
                             context_result = await asyncio.wait_for(
                                 context_agent.process(context_input),
-                                timeout=120.0  # 2 minute timeout for context
+                                timeout=120.0,  # 2 minute timeout for context
                             )
 
                             # Update job with context results
-                            job.update_processing_results({
-                                "context": context_result
-                            })
+                            job.update_processing_results({"context": context_result})
 
                             # Save checkpoint
                             await storage.save_job_status(job_id, job.to_dict())
@@ -879,13 +826,17 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
 
             # Check timeout before continuing
             elapsed_time = time.time() - start_time
-            remaining_time = (context.get_remaining_time_in_millis() / 1000) if context else (LAMBDA_TIMEOUT - elapsed_time)
+            remaining_time = (
+                (context.get_remaining_time_in_millis() / 1000) if context else (LAMBDA_TIMEOUT - elapsed_time)
+            )
 
             if remaining_time < TIMEOUT_BUFFER:
                 logger.warning(f"Timeout approaching for job {job_id}, saving progress")
                 await update_job_status(
-                    storage, job_id, JobStatus.PROCESSING.value,
-                    {"timeout_detected": True, "stages_completed": ["pdf_processing", "context_processing"]}
+                    storage,
+                    job_id,
+                    JobStatus.PROCESSING.value,
+                    {"timeout_detected": True, "stages_completed": ["pdf_processing", "context_processing"]},
                 )
                 return {"status": "timeout", "message": "Processing interrupted due to timeout"}
 
@@ -893,8 +844,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
             logger.info(f"Running Schedule Agent for job {job_id}")
 
             await update_job_status(
-                storage, job_id, JobStatus.PROCESSING.value,
-                {"current_stage": "component_extraction"}
+                storage, job_id, JobStatus.PROCESSING.value, {"current_stage": "component_extraction"}
             )
 
             try:
@@ -925,13 +875,15 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                             flattened_components.extend(page["components"])
 
                 # Update job status after schedule agent
-                job.update_processing_results({
-                    "schedule_agent": {
-                        "completed": True,
-                        "components": agent_result,
-                        "flattened_components": flattened_components
+                job.update_processing_results(
+                    {
+                        "schedule_agent": {
+                            "completed": True,
+                            "components": agent_result,
+                            "flattened_components": flattened_components,
+                        }
                     }
-                })
+                )
 
                 # Save checkpoint
                 await storage.save_job_status(job_id, job.to_dict())
@@ -940,54 +892,58 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
             except ScheduleAgentError as e:
                 logger.error(f"Schedule agent error for job {job_id}: {e}")
                 await update_job_status(
-                    storage, job_id, JobStatus.FAILED.value,
-                    {"error": f"Schedule agent failed: {e!s}", "failed_at": int(time.time())}
+                    storage,
+                    job_id,
+                    JobStatus.FAILED.value,
+                    {"error": f"Schedule agent failed: {e!s}", "failed_at": int(time.time())},
                 )
                 return {"status": "failed", "error": str(e)}
 
             # Check timeout before Excel generation
             elapsed_time = time.time() - start_time
-            remaining_time = (context.get_remaining_time_in_millis() / 1000) if context else (LAMBDA_TIMEOUT - elapsed_time)
+            remaining_time = (
+                (context.get_remaining_time_in_millis() / 1000) if context else (LAMBDA_TIMEOUT - elapsed_time)
+            )
 
             if remaining_time < TIMEOUT_BUFFER:
                 logger.warning(f"Timeout approaching for job {job_id}, saving progress")
                 await update_job_status(
-                    storage, job_id, JobStatus.PROCESSING.value,
-                    {"timeout_detected": True, "stages_completed": ["pdf_processing", "context_processing", "component_extraction"]}
+                    storage,
+                    job_id,
+                    JobStatus.PROCESSING.value,
+                    {
+                        "timeout_detected": True,
+                        "stages_completed": ["pdf_processing", "context_processing", "component_extraction"],
+                    },
                 )
                 return {"status": "timeout", "message": "Processing interrupted due to timeout"}
 
             # Step 4: Excel Generation Agent
             logger.info(f"Running Excel Generation Agent for job {job_id}")
 
-            await update_job_status(
-                storage, job_id, JobStatus.PROCESSING.value,
-                {"current_stage": "excel_generation"}
-            )
+            await update_job_status(storage, job_id, JobStatus.PROCESSING.value, {"current_stage": "excel_generation"})
 
             excel_agent = ExcelGenerationAgent(storage=storage, job=job)
 
             # Process with Excel Generation Agent
-            excel_result = await excel_agent.process({
-                "components": flattened_components
-            })
+            excel_result = await excel_agent.process({"components": flattened_components})
 
             # Update job with Excel generation results
-            job.update_processing_results({
-                "excel_generation": {
-                    "completed": excel_result.get("status") == "completed",
-                    "file_path": excel_result.get("file_path"),
-                    "summary": excel_result.get("summary", {})
+            job.update_processing_results(
+                {
+                    "excel_generation": {
+                        "completed": excel_result.get("status") == "completed",
+                        "file_path": excel_result.get("file_path"),
+                        "summary": excel_result.get("summary", {}),
+                    }
                 }
-            })
+            )
 
             # Update job metadata with Excel file path
             excel_file_path = None
             if excel_result.get("file_path"):
                 excel_file_path = excel_result.get("file_path")
-                job.update_metadata({
-                    "excel_file_path": excel_file_path
-                })
+                job.update_metadata({"excel_file_path": excel_file_path})
 
             # Save checkpoint before judge evaluation
             await storage.save_job_status(job_id, job.to_dict())
@@ -996,10 +952,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
             # Step 5: Judge Agent Evaluation
             logger.info(f"Running Judge Agent for job {job_id}")
 
-            await update_job_status(
-                storage, job_id, JobStatus.PROCESSING.value,
-                {"current_stage": "evaluation"}
-            )
+            await update_job_status(storage, job_id, JobStatus.PROCESSING.value, {"current_stage": "evaluation"})
 
             try:
                 judge_agent = JudgeAgentV2(storage=storage, job=job)
@@ -1009,17 +962,19 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                     "drawing_file": str(tmp_file_path) if tmp_file_path.exists() else None,
                     "context": context_result.get("context") if context_result else None,
                     "components": flattened_components,
-                    "excel_file": excel_file_path
+                    "excel_file": excel_file_path,
                 }
 
                 # Run evaluation
                 judge_result = await judge_agent.process(judge_input)
 
                 # Update job with evaluation results
-                job.update_processing_results({
-                    "evaluation": judge_result.get("evaluation", {}),
-                    "evaluation_metadata": judge_result.get("metadata", {})
-                })
+                job.update_processing_results(
+                    {
+                        "evaluation": judge_result.get("evaluation", {}),
+                        "evaluation_metadata": judge_result.get("metadata", {}),
+                    }
+                )
 
                 # Log evaluation summary
                 evaluation = judge_result.get("evaluation", {})
@@ -1029,12 +984,9 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
             except Exception as e:
                 # Log but don't fail the job if judge evaluation fails
                 logger.error(f"Judge evaluation failed for job {job_id}: {e}")
-                job.update_processing_results({
-                    "evaluation": {
-                        "overall_assessment": "Evaluation failed",
-                        "error": str(e)
-                    }
-                })
+                job.update_processing_results(
+                    {"evaluation": {"overall_assessment": "Evaluation failed", "error": str(e)}}
+                )
 
             # Mark job as completed
             total_processing_time = time.time() - start_time
@@ -1042,12 +994,20 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
 
             # Final status update
             final_job_data = job.to_dict()
-            final_job_data.update({
-                "current_stage": "completed",
-                "stages_completed": ["pdf_processing", "context_processing", "component_extraction", "excel_generation", "evaluation"],
-                "completed_at": int(time.time()),
-                "total_processing_time_seconds": round(total_processing_time, 2)
-            })
+            final_job_data.update(
+                {
+                    "current_stage": "completed",
+                    "stages_completed": [
+                        "pdf_processing",
+                        "context_processing",
+                        "component_extraction",
+                        "excel_generation",
+                        "evaluation",
+                    ],
+                    "completed_at": int(time.time()),
+                    "total_processing_time_seconds": round(total_processing_time, 2),
+                }
+            )
 
             await storage.save_job_status(job_id, final_job_data)
 
@@ -1057,7 +1017,7 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
                 "status": "completed",
                 "processing_time": total_processing_time,
                 "components_found": len(flattened_components),
-                "excel_generated": excel_result.get("status") == "completed"
+                "excel_generated": excel_result.get("status") == "completed",
             }
 
         finally:
@@ -1068,32 +1028,40 @@ async def process_job(storage, message_body: dict[str, Any], context: Any, start
     except PasswordProtectedPDFError as e:
         logger.error(f"Password protected PDF for job {job_id}: {e}")
         await update_job_status(
-            storage, job_id, JobStatus.FAILED.value,
-            {"error": "PDF is password protected", "failed_at": int(time.time())}
+            storage,
+            job_id,
+            JobStatus.FAILED.value,
+            {"error": "PDF is password protected", "failed_at": int(time.time())},
         )
         return {"status": "failed", "error": "PDF is password protected"}
 
     except CorruptedPDFError as e:
         logger.error(f"Corrupted PDF for job {job_id}: {e}")
         await update_job_status(
-            storage, job_id, JobStatus.FAILED.value,
-            {"error": "PDF file is corrupted or invalid", "failed_at": int(time.time())}
+            storage,
+            job_id,
+            JobStatus.FAILED.value,
+            {"error": "PDF file is corrupted or invalid", "failed_at": int(time.time())},
         )
         return {"status": "failed", "error": "PDF file is corrupted or invalid"}
 
     except MissingDependencyError as e:
         logger.error(f"Missing dependency for job {job_id}: {e}")
         await update_job_status(
-            storage, job_id, JobStatus.FAILED.value,
-            {"error": "System dependency missing: poppler-utils", "failed_at": int(time.time())}
+            storage,
+            job_id,
+            JobStatus.FAILED.value,
+            {"error": "System dependency missing: poppler-utils", "failed_at": int(time.time())},
         )
         return {"status": "failed", "error": "System dependency missing"}
 
     except Exception as e:
         logger.error(f"Unexpected error processing job {job_id}: {e}", exc_info=True)
         await update_job_status(
-            storage, job_id, JobStatus.FAILED.value,
-            {"error": f"Unexpected error: {type(e).__name__}", "failed_at": int(time.time())}
+            storage,
+            job_id,
+            JobStatus.FAILED.value,
+            {"error": f"Unexpected error: {type(e).__name__}", "failed_at": int(time.time())},
         )
         return {"status": "failed", "error": str(e)}
 
@@ -1104,11 +1072,7 @@ async def update_job_status(storage, job_id: str, status: str, additional_data: 
         # Get current job data
         current_job = await storage.get_job_status(job_id)
         if current_job:
-            current_job.update({
-                "status": status,
-                "updated_at": int(time.time()),
-                **additional_data
-            })
+            current_job.update({"status": status, "updated_at": int(time.time()), **additional_data})
             await storage.save_job_status(job_id, current_job)
         else:
             logger.warning(f"Job {job_id} not found when updating status")
@@ -1129,6 +1093,7 @@ def await_sync(coro):
         if loop.is_running():
             # If loop is running, create a new task
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, coro)
                 return future.result()

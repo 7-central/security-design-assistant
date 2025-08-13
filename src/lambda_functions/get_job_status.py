@@ -15,10 +15,7 @@ from src.utils.error_handlers import (
 from src.utils.storage_manager import StorageManager
 
 # Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -42,11 +39,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     # Check for warmer request early to minimize cold start impact
     from src.lambda_functions.lambda_warmer import check_and_handle_warmer
+
     if check_and_handle_warmer(event):
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Function warmed successfully', 'warmer': True})
-        }
+        return {"statusCode": 200, "body": json.dumps({"message": "Function warmed successfully", "warmer": True})}
 
     # Track execution metrics
     start_time = time.time()
@@ -54,26 +49,30 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     correlation_id = create_correlation_id()
 
     # Log structured request start
-    logger.info(json.dumps({
-        "event_type": "status_request",
-        "timestamp": int(time.time()),
-        "correlation_id": correlation_id,
-        "function_name": function_name,
-        "http_method": event.get('httpMethod'),
-        "path": event.get('path')
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "event_type": "status_request",
+                "timestamp": int(time.time()),
+                "correlation_id": correlation_id,
+                "function_name": function_name,
+                "http_method": event.get("httpMethod"),
+                "path": event.get("path"),
+            }
+        )
+    )
 
     try:
         # Parse request from API Gateway
-        if event.get('httpMethod') != 'GET':
+        if event.get("httpMethod") != "GET":
             return create_api_error_response(405, "Method not allowed", correlation_id=correlation_id)
 
         # Extract job_id from path parameters
-        path_parameters = event.get('pathParameters', {})
-        if not path_parameters or 'job_id' not in path_parameters:
+        path_parameters = event.get("pathParameters", {})
+        if not path_parameters or "job_id" not in path_parameters:
             return create_api_error_response(400, "Missing job_id in path", correlation_id=correlation_id)
 
-        job_id = path_parameters['job_id']
+        job_id = path_parameters["job_id"]
 
         if not job_id:
             return create_api_error_response(400, "job_id cannot be empty", correlation_id=correlation_id)
@@ -88,12 +87,16 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         job_data = await_sync(storage.get_job_status(job_id))
 
         if not job_data:
-            logger.info(json.dumps({
-                "event_type": "job_not_found",
-                "timestamp": int(time.time()),
-                "correlation_id": correlation_id,
-                "job_id": job_id
-            }))
+            logger.info(
+                json.dumps(
+                    {
+                        "event_type": "job_not_found",
+                        "timestamp": int(time.time()),
+                        "correlation_id": correlation_id,
+                        "job_id": job_id,
+                    }
+                )
+            )
             return create_api_error_response(404, f"Job {job_id} not found", correlation_id=correlation_id)
 
         # Build response with all relevant information
@@ -105,7 +108,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             "processing_time_seconds": job_data.get("total_processing_time_seconds"),
             "metadata": job_data.get("metadata", {}),
             "current_stage": job_data.get("current_stage"),
-            "stages_completed": job_data.get("stages_completed", [])
+            "stages_completed": job_data.get("stages_completed", []),
         }
 
         # Add progress information based on current stage
@@ -117,11 +120,17 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             response["progress"] = {
                 "percentage": 0,
                 "current_step": "Waiting in queue",
-                "estimated_time_remaining_seconds": 300
+                "estimated_time_remaining_seconds": 300,
             }
         elif status == "processing":
             # Calculate progress based on completed stages
-            total_stages = ["pdf_processing", "context_processing", "component_extraction", "excel_generation", "evaluation"]
+            total_stages = [
+                "pdf_processing",
+                "context_processing",
+                "component_extraction",
+                "excel_generation",
+                "evaluation",
+            ]
             completed_count = len(stages_completed)
             progress_percentage = min(90, (completed_count / len(total_stages)) * 100)  # Cap at 90% until complete
 
@@ -130,7 +139,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "context_processing": "Processing context",
                 "component_extraction": "Extracting components",
                 "excel_generation": "Generating Excel file",
-                "evaluation": "Running quality evaluation"
+                "evaluation": "Running quality evaluation",
             }
 
             current_step = stage_names.get(current_stage, f"Processing ({current_stage})")
@@ -139,19 +148,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "percentage": int(progress_percentage),
                 "current_step": current_step,
                 "stages_completed": stages_completed,
-                "estimated_time_remaining_seconds": max(30, 300 - (completed_count * 60))
+                "estimated_time_remaining_seconds": max(30, 300 - (completed_count * 60)),
             }
         elif status == "completed":
             response["progress"] = {
                 "percentage": 100,
                 "current_step": "Completed",
-                "stages_completed": stages_completed
+                "stages_completed": stages_completed,
             }
         elif status == "failed":
             response["progress"] = {
                 "percentage": 0,
                 "current_step": "Failed",
-                "error": job_data.get("error", "Processing failed")
+                "error": job_data.get("error", "Processing failed"),
             }
 
         # Add file information and download URLs if available
@@ -175,7 +184,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "type": "excel",
                 "filename": f"schedule_{job_id}.xlsx",
                 "download_url": download_url,
-                "description": "Generated security schedule"
+                "description": "Generated security schedule",
             }
 
         # Components JSON (always available if schedule agent completed)
@@ -187,7 +196,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                     "type": "json",
                     "filename": f"components_{job_id}.json",
                     "data": components,  # Include inline for JSON
-                    "description": "Extracted security components"
+                    "description": "Extracted security components",
                 }
 
         # Original drawing file (for reference)
@@ -198,7 +207,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "type": "pdf",
                 "filename": job_data.get("metadata", {}).get("file_name", "drawing.pdf"),
                 "download_url": drawing_url,
-                "description": "Original drawing file"
+                "description": "Original drawing file",
             }
 
         # Add summary information
@@ -207,7 +216,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             response["summary"] = {
                 "total_components_found": len(flattened_components),
                 "processing_time_seconds": job_data.get("total_processing_time_seconds"),
-                "excel_generated": excel_generation.get("completed", False)
+                "excel_generated": excel_generation.get("completed", False),
             }
 
             # Add Excel generation summary if available
@@ -221,7 +230,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "overall_assessment": evaluation.get("overall_assessment"),
                 "completeness": evaluation.get("completeness"),
                 "correctness": evaluation.get("correctness"),
-                "improvement_suggestions": evaluation.get("improvement_suggestions", [])
+                "improvement_suggestions": evaluation.get("improvement_suggestions", []),
             }
 
         # Add error information if failed
@@ -229,7 +238,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             response["error"] = {
                 "message": job_data.get("error", "Processing failed"),
                 "failed_at": format_timestamp(job_data.get("failed_at")),
-                "stage": current_stage or "unknown"
+                "stage": current_stage or "unknown",
             }
 
         # Add timeout information if detected
@@ -237,7 +246,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             response["timeout_info"] = {
                 "detected": True,
                 "message": "Processing was interrupted due to Lambda timeout",
-                "can_resume": status == "processing"  # Could implement resume functionality
+                "can_resume": status == "processing",  # Could implement resume functionality
             }
 
         # Add correlation ID to response
@@ -245,81 +254,70 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         # Log successful status response
         execution_time = time.time() - start_time
-        logger.info(json.dumps({
-            "event_type": "status_response_success",
-            "timestamp": int(time.time()),
-            "correlation_id": correlation_id,
-            "job_id": job_id,
-            "job_status": status,
-            "status_code": 200,
-            "execution_time_seconds": execution_time,
-            "has_files": len(response.get("files", {})) > 0
-        }))
-
-        # Log execution metrics
-        log_lambda_metrics(
-            function_name,
-            execution_time,
-            success=True,
-            job_id=job_id
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "status_response_success",
+                    "timestamp": int(time.time()),
+                    "correlation_id": correlation_id,
+                    "job_id": job_id,
+                    "job_status": status,
+                    "status_code": 200,
+                    "execution_time_seconds": execution_time,
+                    "has_files": len(response.get("files", {})) > 0,
+                }
+            )
         )
 
+        # Log execution metrics
+        log_lambda_metrics(function_name, execution_time, success=True, job_id=job_id)
+
         # Track API metrics
-        metrics = get_metrics_client(os.getenv('ENVIRONMENT', 'dev'))
+        metrics = get_metrics_client(os.getenv("ENVIRONMENT", "dev"))
         response_body = json.dumps(response, indent=2)
-        response_size = len(response_body.encode('utf-8'))
+        response_size = len(response_body.encode("utf-8"))
 
         metrics.track_api_metrics(
             endpoint=f"/status/{job_id}",
             method="GET",
             status_code=200,
             response_time=execution_time,
-            response_size_bytes=response_size
+            response_size_bytes=response_size,
         )
 
         # Determine cache headers based on job status
         from src.utils.env_cache import get_cache_headers
+
         cache_headers = {}
 
-        if status in ['completed', 'failed']:
+        if status in ["completed", "failed"]:
             # Cache completed/failed jobs for longer (1 hour)
             cache_headers = get_cache_headers(max_age=3600)
-        elif status in ['processing', 'queued']:
+        elif status in ["processing", "queued"]:
             # Cache in-progress jobs for shorter time (1 minute)
             cache_headers = get_cache_headers(max_age=60)
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
                 **cache_headers,
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-                'Access-Control-Allow-Methods': 'GET,OPTIONS',
-                'X-Correlation-ID': correlation_id
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
+                "Access-Control-Allow-Methods": "GET,OPTIONS",
+                "X-Correlation-ID": correlation_id,
             },
-            'body': json.dumps(response, indent=2)
+            "body": json.dumps(response, indent=2),
         }
 
     except Exception as e:
         execution_time = time.time() - start_time
 
         log_structured_error(
-            e,
-            {
-                "function_name": function_name,
-                "execution_time": execution_time,
-                "event": event
-            },
-            correlation_id
+            e, {"function_name": function_name, "execution_time": execution_time, "event": event}, correlation_id
         )
 
-        log_lambda_metrics(
-            function_name,
-            execution_time,
-            success=False,
-            error_count=1
-        )
+        log_lambda_metrics(function_name, execution_time, success=False, error_count=1)
 
         return create_api_error_response(500, "Internal server error", correlation_id=correlation_id)
 
@@ -339,6 +337,7 @@ def format_timestamp(timestamp) -> str:
 
     if isinstance(timestamp, int | float):
         from datetime import datetime
+
         return datetime.fromtimestamp(timestamp, UTC).isoformat()
 
     return str(timestamp)  # Assume already formatted
@@ -347,16 +346,14 @@ def format_timestamp(timestamp) -> str:
 def create_error_response(status_code: int, message: str) -> dict[str, Any]:
     """Create an error response for API Gateway."""
     return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-            'Access-Control-Allow-Methods': 'GET,OPTIONS'
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
+            "Access-Control-Allow-Methods": "GET,OPTIONS",
         },
-        'body': json.dumps({
-            'error': message
-        })
+        "body": json.dumps({"error": message}),
     }
 
 
@@ -373,6 +370,7 @@ def await_sync(coro):
         if loop.is_running():
             # If loop is running, create a new task
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, coro)
                 return future.result()

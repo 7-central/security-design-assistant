@@ -21,7 +21,7 @@ def test_client() -> TestClient:
 @pytest.fixture
 def temp_output_dir() -> Generator[Path, None, None]:
     """Create a temporary output directory for testing."""
-    with tempfile.TemporaryDirectory() as temp_dir, patch.dict(os.environ, {'LOCAL_OUTPUT_DIR': temp_dir}):
+    with tempfile.TemporaryDirectory() as temp_dir, patch.dict(os.environ, {"LOCAL_OUTPUT_DIR": temp_dir}):
         yield Path(temp_dir)
 
 
@@ -73,13 +73,16 @@ def large_pdf_content() -> bytes:
 @pytest.fixture
 def mock_aws_credentials():
     """Mock AWS credentials for testing."""
-    with patch.dict(os.environ, {
-        'AWS_ACCESS_KEY_ID': 'testing',
-        'AWS_SECRET_ACCESS_KEY': 'testing',
-        'AWS_SECURITY_TOKEN': 'testing',
-        'AWS_SESSION_TOKEN': 'testing',
-        'AWS_DEFAULT_REGION': 'us-east-1'
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "AWS_ACCESS_KEY_ID": "testing",
+            "AWS_SECRET_ACCESS_KEY": "testing",
+            "AWS_SECURITY_TOKEN": "testing",
+            "AWS_SESSION_TOKEN": "testing",
+            "AWS_DEFAULT_REGION": "us-east-1",
+        },
+    ):
         yield
 
 
@@ -87,68 +90,48 @@ def mock_aws_credentials():
 def mock_dynamodb_table(mock_aws_credentials):
     """Create a mocked DynamoDB table for testing."""
     with mock_dynamodb():
-        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
         table = dynamodb.create_table(
-            TableName='test-jobs-table',
-            KeySchema=[
-                {
-                    'AttributeName': 'company#client#job',
-                    'KeyType': 'HASH'
-                }
-            ],
+            TableName="test-jobs-table",
+            KeySchema=[{"AttributeName": "company#client#job", "KeyType": "HASH"}],
             AttributeDefinitions=[
-                {
-                    'AttributeName': 'company#client#job',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'status',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'created_at',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'client_name',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'date_bucket',
-                    'AttributeType': 'S'
-                }
+                {"AttributeName": "company#client#job", "AttributeType": "S"},
+                {"AttributeName": "status", "AttributeType": "S"},
+                {"AttributeName": "created_at", "AttributeType": "S"},
+                {"AttributeName": "client_name", "AttributeType": "S"},
+                {"AttributeName": "date_bucket", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
-                    'IndexName': 'StatusDateIndex',
-                    'KeySchema': [
-                        {'AttributeName': 'status', 'KeyType': 'HASH'},
-                        {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                    "IndexName": "StatusDateIndex",
+                    "KeySchema": [
+                        {"AttributeName": "status", "KeyType": "HASH"},
+                        {"AttributeName": "created_at", "KeyType": "RANGE"},
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
                 },
                 {
-                    'IndexName': 'ClientProjectIndex',
-                    'KeySchema': [
-                        {'AttributeName': 'client_name', 'KeyType': 'HASH'},
-                        {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                    "IndexName": "ClientProjectIndex",
+                    "KeySchema": [
+                        {"AttributeName": "client_name", "KeyType": "HASH"},
+                        {"AttributeName": "created_at", "KeyType": "RANGE"},
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
                 },
                 {
-                    'IndexName': 'DateRangeIndex',
-                    'KeySchema': [
-                        {'AttributeName': 'date_bucket', 'KeyType': 'HASH'},
-                        {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                    "IndexName": "DateRangeIndex",
+                    "KeySchema": [
+                        {"AttributeName": "date_bucket", "KeyType": "HASH"},
+                        {"AttributeName": "created_at", "KeyType": "RANGE"},
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-                }
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+                },
             ],
-            BillingMode='PROVISIONED',
-            ProvisionedThroughput={'ReadCapacityUnits': 10, 'WriteCapacityUnits': 10}
+            BillingMode="PROVISIONED",
+            ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
         )
         yield table
 
@@ -157,8 +140,8 @@ def mock_dynamodb_table(mock_aws_credentials):
 def mock_s3_bucket(mock_aws_credentials):
     """Create a mocked S3 bucket for testing."""
     with mock_s3():
-        s3_client = boto3.client('s3', region_name='us-east-1')
-        s3_client.create_bucket(Bucket='test-bucket')
+        s3_client = boto3.client("s3", region_name="us-east-1")
+        s3_client.create_bucket(Bucket="test-bucket")
         yield s3_client
 
 
@@ -166,6 +149,6 @@ def mock_s3_bucket(mock_aws_credentials):
 def mock_sqs_queue(mock_aws_credentials):
     """Create a mocked SQS queue for testing."""
     with mock_sqs():
-        sqs_client = boto3.client('sqs', region_name='us-east-1')
-        queue_url = sqs_client.create_queue(QueueName='test-queue')['QueueUrl']
-        yield {'client': sqs_client, 'queue_url': queue_url}
+        sqs_client = boto3.client("sqs", region_name="us-east-1")
+        queue_url = sqs_client.create_queue(QueueName="test-queue")["QueueUrl"]
+        yield {"client": sqs_client, "queue_url": queue_url}

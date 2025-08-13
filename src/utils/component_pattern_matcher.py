@@ -14,35 +14,35 @@ class ComponentPatternMatcher:
     """
 
     # Standard pattern: A-XXX-BB-B2
-    STANDARD_PATTERN = re.compile(r'^[A-Z]-\d{1,3}-[A-Z]{2}-[A-Z]\d$')
+    STANDARD_PATTERN = re.compile(r"^[A-Z]-\d{1,3}-[A-Z]{2}-[A-Z]\d$")
 
     # Flexible patterns for variations
     PATTERNS = {
-        'standard': re.compile(r'^[A-Z]-\d{1,3}-[A-Z]{2}-[A-Z]\d$'),  # A-101-DR-B2
-        'extended': re.compile(r'^[A-Z]{1,3}-\d{1,4}-[A-Z]{2,4}-[A-Z]\d{1,2}$'),  # ABC-1234-DOOR-B10
-        'underscore': re.compile(r'^[A-Z]_\d{1,3}_[A-Z]{2}_[A-Z]\d$'),  # A_101_DR_B2
-        'no_separator': re.compile(r'^[A-Z]\d{1,3}[A-Z]{2}[A-Z]\d$'),  # A101DRB2
-        'dot_separator': re.compile(r'^[A-Z]\.\d{1,3}\.[A-Z]{2}\.[A-Z]\d$'),  # A.101.DR.B2
+        "standard": re.compile(r"^[A-Z]-\d{1,3}-[A-Z]{2}-[A-Z]\d$"),  # A-101-DR-B2
+        "extended": re.compile(r"^[A-Z]{1,3}-\d{1,4}-[A-Z]{2,4}-[A-Z]\d{1,2}$"),  # ABC-1234-DOOR-B10
+        "underscore": re.compile(r"^[A-Z]_\d{1,3}_[A-Z]{2}_[A-Z]\d$"),  # A_101_DR_B2
+        "no_separator": re.compile(r"^[A-Z]\d{1,3}[A-Z]{2}[A-Z]\d$"),  # A101DRB2
+        "dot_separator": re.compile(r"^[A-Z]\.\d{1,3}\.[A-Z]{2}\.[A-Z]\d$"),  # A.101.DR.B2
     }
 
     # Component type codes
     COMPONENT_TYPES = {
-        'DR': 'door',
-        'RD': 'reader',
-        'EB': 'exit_button',
-        'EX': 'exit_button',
-        'LK': 'lock',
-        'LC': 'lock',
-        'CM': 'camera',
-        'CAM': 'camera',
-        'MTN': 'motion',
-        'REX': 'request_exit',
-        'KEY': 'keypad',
-        'BIO': 'biometric'
+        "DR": "door",
+        "RD": "reader",
+        "EB": "exit_button",
+        "EX": "exit_button",
+        "LK": "lock",
+        "LC": "lock",
+        "CM": "camera",
+        "CAM": "camera",
+        "MTN": "motion",
+        "REX": "request_exit",
+        "KEY": "keypad",
+        "BIO": "biometric",
     }
 
     @classmethod
-    def is_valid_pattern(cls, component_id: str, pattern_type: str = 'standard') -> bool:
+    def is_valid_pattern(cls, component_id: str, pattern_type: str = "standard") -> bool:
         """Check if component ID matches specified pattern.
 
         Args:
@@ -58,7 +58,7 @@ class ComponentPatternMatcher:
         # Convert to uppercase for case-insensitive matching
         component_id = component_id.upper().strip()
 
-        if pattern_type == 'any':
+        if pattern_type == "any":
             # Check if matches any known pattern
             return any(pattern.match(component_id) for pattern in cls.PATTERNS.values())
 
@@ -86,71 +86,71 @@ class ComponentPatternMatcher:
         # Try standard pattern first
         match = cls.STANDARD_PATTERN.match(component_id)
         if match:
-            parts = component_id.split('-')
+            parts = component_id.split("-")
             return {
-                'building': parts[0],
-                'number': int(parts[1]),
-                'type_code': parts[2],
-                'zone': parts[3],
-                'component_type': cls.COMPONENT_TYPES.get(parts[2], 'unknown'),
-                'pattern_type': 'standard',
-                'original': component_id
+                "building": parts[0],
+                "number": int(parts[1]),
+                "type_code": parts[2],
+                "zone": parts[3],
+                "component_type": cls.COMPONENT_TYPES.get(parts[2], "unknown"),
+                "pattern_type": "standard",
+                "original": component_id,
             }
 
         # Try extended pattern
-        if cls.PATTERNS['extended'].match(component_id):
-            parts = component_id.split('-')
+        if cls.PATTERNS["extended"].match(component_id):
+            parts = component_id.split("-")
             if len(parts) == 4:
                 return {
-                    'building': parts[0],
-                    'number': int(parts[1]),
-                    'type_code': parts[2],
-                    'zone': parts[3],
-                    'component_type': cls.COMPONENT_TYPES.get(parts[2][:2], 'unknown'),
-                    'pattern_type': 'extended',
-                    'original': component_id
+                    "building": parts[0],
+                    "number": int(parts[1]),
+                    "type_code": parts[2],
+                    "zone": parts[3],
+                    "component_type": cls.COMPONENT_TYPES.get(parts[2][:2], "unknown"),
+                    "pattern_type": "extended",
+                    "original": component_id,
                 }
 
         # Try underscore pattern
-        if cls.PATTERNS['underscore'].match(component_id):
-            parts = component_id.split('_')
+        if cls.PATTERNS["underscore"].match(component_id):
+            parts = component_id.split("_")
             return {
-                'building': parts[0],
-                'number': int(parts[1]),
-                'type_code': parts[2],
-                'zone': parts[3],
-                'component_type': cls.COMPONENT_TYPES.get(parts[2], 'unknown'),
-                'pattern_type': 'underscore',
-                'original': component_id
+                "building": parts[0],
+                "number": int(parts[1]),
+                "type_code": parts[2],
+                "zone": parts[3],
+                "component_type": cls.COMPONENT_TYPES.get(parts[2], "unknown"),
+                "pattern_type": "underscore",
+                "original": component_id,
             }
 
         # Try dot separator pattern
-        if cls.PATTERNS['dot_separator'].match(component_id):
-            parts = component_id.split('.')
+        if cls.PATTERNS["dot_separator"].match(component_id):
+            parts = component_id.split(".")
             return {
-                'building': parts[0],
-                'number': int(parts[1]),
-                'type_code': parts[2],
-                'zone': parts[3],
-                'component_type': cls.COMPONENT_TYPES.get(parts[2], 'unknown'),
-                'pattern_type': 'dot_separator',
-                'original': component_id
+                "building": parts[0],
+                "number": int(parts[1]),
+                "type_code": parts[2],
+                "zone": parts[3],
+                "component_type": cls.COMPONENT_TYPES.get(parts[2], "unknown"),
+                "pattern_type": "dot_separator",
+                "original": component_id,
             }
 
         # Try no separator pattern
-        if cls.PATTERNS['no_separator'].match(component_id):
+        if cls.PATTERNS["no_separator"].match(component_id):
             # Extract parts using regex groups
-            pattern = re.compile(r'^([A-Z])(\d{1,3})([A-Z]{2})([A-Z]\d)$')
+            pattern = re.compile(r"^([A-Z])(\d{1,3})([A-Z]{2})([A-Z]\d)$")
             match = pattern.match(component_id)
             if match:
                 return {
-                    'building': match.group(1),
-                    'number': int(match.group(2)),
-                    'type_code': match.group(3),
-                    'zone': match.group(4),
-                    'component_type': cls.COMPONENT_TYPES.get(match.group(3), 'unknown'),
-                    'pattern_type': 'no_separator',
-                    'original': component_id
+                    "building": match.group(1),
+                    "number": int(match.group(2)),
+                    "type_code": match.group(3),
+                    "zone": match.group(4),
+                    "component_type": cls.COMPONENT_TYPES.get(match.group(3), "unknown"),
+                    "pattern_type": "no_separator",
+                    "original": component_id,
                 }
 
         return None
@@ -184,7 +184,7 @@ class ComponentPatternMatcher:
         """
         results = {}
         for component_id in component_ids:
-            results[component_id] = cls.is_valid_pattern(component_id, 'any')
+            results[component_id] = cls.is_valid_pattern(component_id, "any")
         return results
 
     @classmethod
@@ -198,4 +198,4 @@ class ComponentPatternMatcher:
             Component type or None if invalid
         """
         parsed = cls.parse_component_id(component_id)
-        return parsed['component_type'] if parsed else None
+        return parsed["component_type"] if parsed else None

@@ -69,7 +69,7 @@ async def generate_download_url(path: str) -> str:
     """
     storage = StorageManager.get_storage()
 
-    if hasattr(storage, 'generate_presigned_url'):
+    if hasattr(storage, "generate_presigned_url"):
         return await storage.generate_presigned_url(path)
     else:
         return f"/download/{path}"

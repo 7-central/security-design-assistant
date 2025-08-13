@@ -36,9 +36,9 @@ class PromptVersionManager:
                         "created_at": datetime.utcnow().isoformat(),
                         "description": "Baseline prompt",
                         "changes": [],
-                        "performance": {}
+                        "performance": {},
                     }
-                }
+                },
             }
             self.version_metadata_file.write_text(json.dumps(initial_metadata, indent=2))
 
@@ -104,7 +104,7 @@ class PromptVersionManager:
             "created_at": datetime.utcnow().isoformat(),
             "base_version": base_version,
             "changes": changes,
-            "performance": {}
+            "performance": {},
         }
         self._save_metadata(metadata)
 

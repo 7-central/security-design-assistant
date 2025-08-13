@@ -11,6 +11,7 @@ from src.storage.local_storage import LocalStorage
 def local_storage(temp_output_dir: Path) -> LocalStorage:
     """Create LocalStorage instance with temporary directory."""
     from src.utils.env_cache import get_env_cache
+
     # Clear the environment cache to pick up the patched values
     get_env_cache().clear_cache()
 
@@ -108,11 +109,7 @@ class TestLocalStorage:
     @pytest.mark.asyncio
     async def test_save_and_get_job_status(self, local_storage: LocalStorage) -> None:
         job_id = "job_123"
-        status_data = {
-            "status": "processing",
-            "created_at": "2024-01-01T00:00:00",
-            "client_name": "TestClient"
-        }
+        status_data = {"status": "processing", "created_at": "2024-01-01T00:00:00", "client_name": "TestClient"}
 
         # Save job status
         await local_storage.save_job_status(job_id, status_data)
@@ -149,7 +146,7 @@ class TestLocalStorage:
 
             # Mock the environment variable for LOCAL_OUTPUT_DIR
             try:
-                with patch.dict(os.environ, {'LOCAL_OUTPUT_DIR': str(test_dir / "output")}):
+                with patch.dict(os.environ, {"LOCAL_OUTPUT_DIR": str(test_dir / "output")}):
                     # Clear the environment cache to pick up the patched value
                     get_env_cache().clear_cache()
                     with pytest.raises(PermissionError):

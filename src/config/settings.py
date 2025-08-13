@@ -78,19 +78,19 @@ class Settings:
     # AWS Lambda static configuration
     @property
     def aws_region(self) -> str:
-        return get_static_config('aws_region') or 'us-east-1'
+        return get_static_config("aws_region") or "us-east-1"
 
     @property
     def function_name(self) -> str | None:
-        return get_static_config('function_name')
+        return get_static_config("function_name")
 
     @property
     def memory_size(self) -> str | None:
-        return get_static_config('memory_size')
+        return get_static_config("memory_size")
 
     @property
     def architecture(self) -> str:
-        return get_static_config('architecture') or 'arm64'
+        return get_static_config("architecture") or "arm64"
 
     @property
     def local_output_path(self) -> Path:

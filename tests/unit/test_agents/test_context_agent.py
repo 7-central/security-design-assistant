@@ -37,7 +37,7 @@ def mock_job():
 @pytest.fixture
 def context_agent(mock_storage, mock_job):
     """Create Context Agent instance."""
-    with patch('src.agents.base_agent_v2.settings') as mock_settings:
+    with patch("src.agents.base_agent_v2.settings") as mock_settings:
         mock_settings.GEMINI_API_KEY = "test_api_key"
         agent = ContextAgent(mock_storage, mock_job)
         # Mock the _client attribute directly instead of the property
@@ -66,23 +66,24 @@ class TestContextAgent:
         """Test processing text context."""
         input_data = {
             "context_text": "Lock Type 11: Electromagnetic lock with 1200lb holding force",
-            "context_type": {"type": "text", "format": "string"}
+            "context_type": {"type": "text", "format": "string"},
         }
 
         # Mock the AI response
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "sections": [
-                {
-                    "title": "Lock Specifications",
-                    "content": "Lock Type 11: Electromagnetic lock with 1200lb holding force",
-                    "type": "specification"
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "sections": [
+                    {
+                        "title": "Lock Specifications",
+                        "content": "Lock Type 11: Electromagnetic lock with 1200lb holding force",
+                        "type": "specification",
+                    }
+                ]
+            }
+        )
 
-        with patch.object(context_agent, '_generate_with_retry',
-                         return_value=mock_response) as mock_generate:
+        with patch.object(context_agent, "_generate_with_retry", return_value=mock_response) as mock_generate:
             result = await context_agent.process(input_data)
 
         assert len(result["sections"]) == 1
@@ -98,15 +99,13 @@ class TestContextAgent:
         with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
             tmp_path = tmp.name
 
-        input_data = {
-            "context_file_path": tmp_path,
-            "context_type": {"type": "docx", "format": "file"}
-        }
+        input_data = {"context_file_path": tmp_path, "context_type": {"type": "docx", "format": "file"}}
 
         # Mock docx library import
         import sys
+
         mock_docx = MagicMock()
-        sys.modules['docx'] = mock_docx
+        sys.modules["docx"] = mock_docx
 
         mock_doc = MagicMock()
         mock_para1 = MagicMock()
@@ -123,26 +122,27 @@ class TestContextAgent:
 
         # Mock AI response
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "sections": [
-                {
-                    "title": "Lock Type 11",
-                    "content": "Electromagnetic lock with 1200lb holding force",
-                    "type": "specification"
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "sections": [
+                    {
+                        "title": "Lock Type 11",
+                        "content": "Electromagnetic lock with 1200lb holding force",
+                        "type": "specification",
+                    }
+                ]
+            }
+        )
 
-        with patch.object(context_agent, '_generate_with_retry',
-                        return_value=mock_response):
+        with patch.object(context_agent, "_generate_with_retry", return_value=mock_response):
             result = await context_agent.process(input_data)
 
         # Clean up temp file
         Path(tmp_path).unlink(missing_ok=True)
 
         # Clean up mock
-        if 'docx' in sys.modules:
-            del sys.modules['docx']
+        if "docx" in sys.modules:
+            del sys.modules["docx"]
 
         assert len(result["sections"]) == 1
         assert result["metadata"]["source_type"] == "docx"
@@ -157,10 +157,7 @@ class TestContextAgent:
             # Write minimal PDF header
             tmp.write(b"%PDF-1.4")
 
-        input_data = {
-            "context_file_path": tmp_path,
-            "context_type": {"type": "pdf", "format": "file"}
-        }
+        input_data = {"context_file_path": tmp_path, "context_type": {"type": "pdf", "format": "file"}}
 
         # Mock file upload
         mock_uploaded_file = MagicMock()
@@ -168,23 +165,19 @@ class TestContextAgent:
 
         # Mock AI response
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "sections": [
-                {
-                    "title": "Lock Specifications",
-                    "content": "Various lock types defined",
-                    "type": "specification"
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "sections": [
+                    {"title": "Lock Specifications", "content": "Various lock types defined", "type": "specification"}
+                ]
+            }
+        )
 
         with (
-            patch.object(context_agent, 'upload_file',
-                        return_value=mock_uploaded_file) as mock_upload,
-            patch.object(context_agent, 'generate_content',
-                        return_value=mock_response) as mock_generate,
+            patch.object(context_agent, "upload_file", return_value=mock_uploaded_file) as mock_upload,
+            patch.object(context_agent, "generate_content", return_value=mock_response) as mock_generate,
         ):
-                result = await context_agent.process(input_data)
+            result = await context_agent.process(input_data)
 
         # Clean up temp file
         Path(tmp_path).unlink(missing_ok=True)
@@ -197,14 +190,10 @@ class TestContextAgent:
     @pytest.mark.asyncio
     async def test_error_handling_continues_pipeline(self, context_agent):
         """Test that errors in context processing don't stop the pipeline."""
-        input_data = {
-            "context_text": "Some context",
-            "context_type": {"type": "text", "format": "string"}
-        }
+        input_data = {"context_text": "Some context", "context_type": {"type": "text", "format": "string"}}
 
         # Mock an error in AI generation
-        with patch.object(context_agent, '_generate_with_retry',
-                         side_effect=Exception("API Error")):
+        with patch.object(context_agent, "_generate_with_retry", side_effect=Exception("API Error")):
             result = await context_agent.process(input_data)
 
         # Should return empty sections but not raise
@@ -218,18 +207,11 @@ class TestContextAgent:
         raw_text = "Lock Type 11: Electromagnetic\nLock Type 12: Magnetic"
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "sections": [
-                {
-                    "title": "Lock Types",
-                    "content": "Type 11 and 12 specifications",
-                    "type": "specification"
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {"sections": [{"title": "Lock Types", "content": "Type 11 and 12 specifications", "type": "specification"}]}
+        )
 
-        with patch.object(context_agent, '_generate_with_retry',
-                         return_value=mock_response):
+        with patch.object(context_agent, "_generate_with_retry", return_value=mock_response):
             result = await context_agent.summarize_specifications(raw_text)
 
         assert "sections" in result
@@ -269,16 +251,12 @@ class TestContextAgent:
     @pytest.mark.asyncio
     async def test_checkpoint_saving(self, context_agent, mock_storage):
         """Test that checkpoints are saved correctly."""
-        input_data = {
-            "context_text": "Test content",
-            "context_type": {"type": "text", "format": "string"}
-        }
+        input_data = {"context_text": "Test content", "context_type": {"type": "text", "format": "string"}}
 
         mock_response = MagicMock()
         mock_response.text = json.dumps({"sections": []})
 
-        with patch.object(context_agent, '_generate_with_retry',
-                         return_value=mock_response):
+        with patch.object(context_agent, "_generate_with_retry", return_value=mock_response):
             await context_agent.process(input_data)
 
         # Verify save_checkpoint was called
@@ -289,18 +267,12 @@ class TestContextAgent:
     @pytest.mark.asyncio
     async def test_metadata_tracking(self, context_agent, mock_job):
         """Test that job metadata is updated with context processing info."""
-        input_data = {
-            "context_text": "Test content",
-            "context_type": {"type": "text", "format": "string"}
-        }
+        input_data = {"context_text": "Test content", "context_type": {"type": "text", "format": "string"}}
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "sections": [{"title": "Test", "content": "Content", "type": "general"}]
-        })
+        mock_response.text = json.dumps({"sections": [{"title": "Test", "content": "Content", "type": "general"}]})
 
-        with patch.object(context_agent, '_generate_with_retry',
-                         return_value=mock_response):
+        with patch.object(context_agent, "_generate_with_retry", return_value=mock_response):
             await context_agent.process(input_data)
 
         # Verify job metadata was updated

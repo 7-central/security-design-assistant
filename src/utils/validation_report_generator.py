@@ -36,8 +36,8 @@ class ValidationReportGenerator:
             "appendices": {
                 "drawing_by_drawing_breakdown": self._create_drawing_breakdown(validation_results),
                 "common_issues_catalog": self._catalog_common_issues(validation_results),
-                "context_effectiveness_analysis": self._analyze_context_effectiveness(validation_results)
-            }
+                "context_effectiveness_analysis": self._analyze_context_effectiveness(validation_results),
+            },
         }
 
         return report
@@ -61,7 +61,9 @@ class ValidationReportGenerator:
             performance_category = "Poor"
 
         success_criteria = assessment_summary.get("meets_success_criteria", {})
-        overall_pass = success_criteria.get("minimum_60_percent_good", False) and success_criteria.get("maximum_20_percent_poor", False)
+        overall_pass = success_criteria.get("minimum_60_percent_good", False) and success_criteria.get(
+            "maximum_20_percent_poor", False
+        )
 
         return {
             "overall_performance": performance_category,
@@ -70,7 +72,7 @@ class ValidationReportGenerator:
             "success_rate_percentage": round(good_rate * 100, 1),
             "average_processing_time_minutes": round(processing_summary.get("average_time_per_drawing", 0) / 60, 1),
             "key_findings": self._extract_key_findings(results),
-            "priority_recommendations": self._extract_priority_recommendations(results)
+            "priority_recommendations": self._extract_priority_recommendations(results),
         }
 
     def _analyze_detailed_results(self, results: dict[str, Any]) -> dict[str, Any]:
@@ -79,12 +81,7 @@ class ValidationReportGenerator:
         completed_results = [r for r in drawing_results if r.get("status") == "completed"]
 
         # Group by assessment
-        by_assessment = {
-            "Good": [],
-            "Fair": [],
-            "Poor": [],
-            "Unknown": []
-        }
+        by_assessment = {"Good": [], "Fair": [], "Poor": [], "Unknown": []}
 
         for result in completed_results:
             assessment = result.get("overall_assessment", "Unknown")
@@ -99,7 +96,8 @@ class ValidationReportGenerator:
                     "drawings": [d["drawing_name"] for d in drawings],
                     "common_characteristics": self._identify_common_characteristics(drawings, results),
                     "average_components": sum(d.get("components_count", 0) for d in drawings) / len(drawings),
-                    "average_processing_time": sum(d.get("processing_time_seconds", 0) for d in drawings) / len(drawings)
+                    "average_processing_time": sum(d.get("processing_time_seconds", 0) for d in drawings)
+                    / len(drawings),
                 }
 
         return analysis
@@ -131,7 +129,7 @@ class ValidationReportGenerator:
             "common_strengths": strengths_weaknesses["strengths"],
             "common_weaknesses": strengths_weaknesses["weaknesses"],
             "context_effectiveness": context_effectiveness,
-            "performance_correlation": self._analyze_performance_correlations(completed_results, test_metadata)
+            "performance_correlation": self._analyze_performance_correlations(completed_results, test_metadata),
         }
 
     def _analyze_performance(self, results: dict[str, Any]) -> dict[str, Any]:
@@ -151,19 +149,20 @@ class ValidationReportGenerator:
                 "mean_seconds": sum(processing_times) / len(processing_times),
                 "min_seconds": min(processing_times),
                 "max_seconds": max(processing_times),
-                "total_seconds": sum(processing_times)
+                "total_seconds": sum(processing_times),
             },
             "component_extraction_statistics": {
                 "mean_components": sum(component_counts) / len(component_counts),
                 "min_components": min(component_counts),
                 "max_components": max(component_counts),
-                "total_components": sum(component_counts)
+                "total_components": sum(component_counts),
             },
             "throughput_metrics": {
                 "drawings_per_hour": 3600 / (sum(processing_times) / len(processing_times)),
-                "successful_completion_rate": processing_summary.get("successful_processing", 0) / processing_summary.get("total_drawings", 1)
+                "successful_completion_rate": processing_summary.get("successful_processing", 0)
+                / processing_summary.get("total_drawings", 1),
             },
-            "cost_analysis": self._analyze_cost_efficiency(results)
+            "cost_analysis": self._analyze_cost_efficiency(results),
         }
 
     def _evaluate_success_criteria(self, results: dict[str, Any]) -> dict[str, Any]:
@@ -175,19 +174,20 @@ class ValidationReportGenerator:
             "criteria_definition": {
                 "minimum_good_rate": 0.6,
                 "maximum_poor_rate": 0.2,
-                "minimum_confidence": 0.7  # If available in future
+                "minimum_confidence": 0.7,  # If available in future
             },
             "actual_results": {
                 "good_rate": assessment_summary.get("good_rate", 0),
                 "poor_rate": assessment_summary.get("poor_rate", 0),
-                "total_assessments": assessment_summary.get("total_assessments", 0)
+                "total_assessments": assessment_summary.get("total_assessments", 0),
             },
             "criteria_met": {
                 "minimum_60_percent_good": criteria.get("minimum_60_percent_good", False),
-                "maximum_20_percent_poor": criteria.get("maximum_20_percent_poor", False)
+                "maximum_20_percent_poor": criteria.get("maximum_20_percent_poor", False),
             },
-            "overall_pass": criteria.get("minimum_60_percent_good", False) and criteria.get("maximum_20_percent_poor", False),
-            "gap_analysis": self._analyze_success_criteria_gaps(assessment_summary)
+            "overall_pass": criteria.get("minimum_60_percent_good", False)
+            and criteria.get("maximum_20_percent_poor", False),
+            "gap_analysis": self._analyze_success_criteria_gaps(assessment_summary),
         }
 
         return evaluation
@@ -209,18 +209,22 @@ class ValidationReportGenerator:
             issue_patterns = self._identify_issue_patterns(problem_drawings, test_metadata)
 
             for pattern in issue_patterns:
-                priority = self._calculate_recommendation_priority(pattern, len(problem_drawings), len(completed_results))
+                priority = self._calculate_recommendation_priority(
+                    pattern, len(problem_drawings), len(completed_results)
+                )
 
-                recommendations.append({
-                    "priority": priority["level"],
-                    "impact_percentage": priority["impact_percentage"],
-                    "title": pattern["title"],
-                    "description": pattern["description"],
-                    "affected_drawings": pattern["affected_drawings"],
-                    "suggested_improvements": pattern["improvements"],
-                    "estimated_effort": pattern.get("effort", "Medium"),
-                    "category": pattern["category"]
-                })
+                recommendations.append(
+                    {
+                        "priority": priority["level"],
+                        "impact_percentage": priority["impact_percentage"],
+                        "title": pattern["title"],
+                        "description": pattern["description"],
+                        "affected_drawings": pattern["affected_drawings"],
+                        "suggested_improvements": pattern["improvements"],
+                        "estimated_effort": pattern.get("effort", "Medium"),
+                        "category": pattern["category"],
+                    }
+                )
 
         # Add general recommendations based on overall performance
         overall_recommendations = self._generate_general_recommendations(results)
@@ -269,7 +273,9 @@ class ValidationReportGenerator:
 
         return characteristics
 
-    def _analyze_by_complexity(self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]) -> dict[str, Any]:
+    def _analyze_by_complexity(
+        self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Analyze performance by drawing complexity."""
         drawings_info = test_metadata.get("drawings", {})
         complexity_results = {}
@@ -295,7 +301,9 @@ class ValidationReportGenerator:
 
         return complexity_results
 
-    def _analyze_by_challenge_type(self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]) -> dict[str, Any]:
+    def _analyze_by_challenge_type(
+        self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Analyze performance by challenge type."""
         drawings_info = test_metadata.get("drawings", {})
         challenge_results = {}
@@ -372,17 +380,11 @@ class ValidationReportGenerator:
             for k, v in sorted(weaknesses.items(), key=lambda x: x[1], reverse=True)
         ]
 
-        return {
-            "strengths": ranked_strengths,
-            "weaknesses": ranked_weaknesses
-        }
+        return {"strengths": ranked_strengths, "weaknesses": ranked_weaknesses}
 
     def _analyze_context_effectiveness(self, completed_results: list[dict[str, Any]]) -> dict[str, Any]:
         """Analyze effectiveness of context usage."""
-        context_analysis = {
-            "with_context": [],
-            "without_context": []
-        }
+        context_analysis = {"with_context": [], "without_context": []}
 
         for result in completed_results:
             # Check if context was used (this would need to be tracked in pipeline)
@@ -405,12 +407,16 @@ class ValidationReportGenerator:
                 analysis[context_type] = {
                     "count": total,
                     "good_rate": good_count / total if total > 0 else 0,
-                    "average_components": sum(r.get("components_count", 0) for r in results_list) / total if total > 0 else 0
+                    "average_components": sum(r.get("components_count", 0) for r in results_list) / total
+                    if total > 0
+                    else 0,
                 }
 
         return analysis
 
-    def _analyze_performance_correlations(self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]) -> dict[str, Any]:
+    def _analyze_performance_correlations(
+        self, completed_results: list[dict[str, Any]], test_metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Analyze correlations between drawing characteristics and performance."""
         correlations = {}
 
@@ -425,7 +431,8 @@ class ValidationReportGenerator:
             correlations["component_count_correlation"] = {
                 "good_drawings_avg_components": avg_components_good,
                 "poor_drawings_avg_components": avg_components_poor,
-                "insight": "Higher component count drawings" + (" perform better" if avg_components_good > avg_components_poor else " perform worse")
+                "insight": "Higher component count drawings"
+                + (" perform better" if avg_components_good > avg_components_poor else " perform worse"),
             }
 
         return correlations
@@ -485,8 +492,12 @@ class ValidationReportGenerator:
         return {
             "total_estimated_cost": total_cost,
             "cost_per_drawing": total_cost / total_assessments if total_assessments > 0 else 0,
-            "cost_per_good_assessment": total_cost / good_assessments if good_assessments > 0 else float('inf'),
-            "efficiency_rating": "High" if good_assessments / total_assessments > 0.8 else "Medium" if good_assessments / total_assessments > 0.6 else "Low"
+            "cost_per_good_assessment": total_cost / good_assessments if good_assessments > 0 else float("inf"),
+            "efficiency_rating": "High"
+            if good_assessments / total_assessments > 0.8
+            else "Medium"
+            if good_assessments / total_assessments > 0.6
+            else "Low",
         }
 
     def _analyze_success_criteria_gaps(self, assessment_summary: dict[str, Any]) -> dict[str, Any]:
@@ -501,7 +512,13 @@ class ValidationReportGenerator:
                 "current": good_rate,
                 "target": 0.6,
                 "improvement_needed": 0.6 - good_rate,
-                "additional_good_assessments_needed": max(0, int((0.6 * assessment_summary.get("total_assessments", 0)) - assessment_summary.get("good_assessments", 0)))
+                "additional_good_assessments_needed": max(
+                    0,
+                    int(
+                        (0.6 * assessment_summary.get("total_assessments", 0))
+                        - assessment_summary.get("good_assessments", 0)
+                    ),
+                ),
             }
 
         if poor_rate > 0.2:
@@ -509,12 +526,20 @@ class ValidationReportGenerator:
                 "current": poor_rate,
                 "target": 0.2,
                 "reduction_needed": poor_rate - 0.2,
-                "poor_assessments_to_improve": max(0, int(assessment_summary.get("poor_assessments", 0) - (0.2 * assessment_summary.get("total_assessments", 0))))
+                "poor_assessments_to_improve": max(
+                    0,
+                    int(
+                        assessment_summary.get("poor_assessments", 0)
+                        - (0.2 * assessment_summary.get("total_assessments", 0))
+                    ),
+                ),
             }
 
         return gaps
 
-    def _identify_issue_patterns(self, problem_drawings: list[dict[str, Any]], test_metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    def _identify_issue_patterns(
+        self, problem_drawings: list[dict[str, Any]], test_metadata: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Identify common patterns among problematic drawings."""
         patterns = []
         drawings_info = test_metadata.get("drawings", {})
@@ -535,21 +560,25 @@ class ValidationReportGenerator:
         # Convert to patterns
         for key, drawings in characteristics_groups.items():
             if len(drawings) > 1:  # Only report patterns affecting multiple drawings
-                patterns.append({
-                    "title": f"Issues with {key.replace('_', ' ').title()}",
-                    "description": f"{len(drawings)} drawings showing poor performance in this area",
-                    "affected_drawings": [d["drawing_name"] for d in drawings],
-                    "category": key.split('_')[0],
-                    "improvements": [
-                        "Enhance recognition algorithms for this drawing type",
-                        "Improve preprocessing for these characteristics",
-                        "Add specialized handling logic"
-                    ]
-                })
+                patterns.append(
+                    {
+                        "title": f"Issues with {key.replace('_', ' ').title()}",
+                        "description": f"{len(drawings)} drawings showing poor performance in this area",
+                        "affected_drawings": [d["drawing_name"] for d in drawings],
+                        "category": key.split("_")[0],
+                        "improvements": [
+                            "Enhance recognition algorithms for this drawing type",
+                            "Improve preprocessing for these characteristics",
+                            "Add specialized handling logic",
+                        ],
+                    }
+                )
 
         return patterns
 
-    def _calculate_recommendation_priority(self, pattern: dict[str, Any], problem_count: int, total_count: int) -> dict[str, Any]:
+    def _calculate_recommendation_priority(
+        self, pattern: dict[str, Any], problem_count: int, total_count: int
+    ) -> dict[str, Any]:
         """Calculate priority level for a recommendation."""
         affected_count = len(pattern["affected_drawings"])
         impact_percentage = (affected_count / total_count) * 100
@@ -561,10 +590,7 @@ class ValidationReportGenerator:
         else:
             priority_level = "Low"
 
-        return {
-            "level": priority_level,
-            "impact_percentage": impact_percentage
-        }
+        return {"level": priority_level, "impact_percentage": impact_percentage}
 
     def _generate_general_recommendations(self, results: dict[str, Any]) -> list[dict[str, Any]]:
         """Generate general recommendations based on overall performance."""
@@ -575,37 +601,44 @@ class ValidationReportGenerator:
 
         # Performance-based recommendations
         if assessment_summary.get("good_rate", 0) < 0.8:
-            recommendations.append({
-                "priority": "Medium",
-                "impact_percentage": 100,
-                "title": "Improve Overall Accuracy",
-                "description": "System accuracy below optimal levels",
-                "affected_drawings": "All",
-                "suggested_improvements": [
-                    "Review and enhance core extraction algorithms",
-                    "Improve training data quality",
-                    "Add validation steps in pipeline"
-                ],
-                "estimated_effort": "High",
-                "category": "accuracy"
-            })
+            recommendations.append(
+                {
+                    "priority": "Medium",
+                    "impact_percentage": 100,
+                    "title": "Improve Overall Accuracy",
+                    "description": "System accuracy below optimal levels",
+                    "affected_drawings": "All",
+                    "suggested_improvements": [
+                        "Review and enhance core extraction algorithms",
+                        "Improve training data quality",
+                        "Add validation steps in pipeline",
+                    ],
+                    "estimated_effort": "High",
+                    "category": "accuracy",
+                }
+            )
 
         # Reliability recommendations
         if processing_summary.get("failed_processing", 0) > 0:
-            recommendations.append({
-                "priority": "High",
-                "impact_percentage": (processing_summary.get("failed_processing", 0) / processing_summary.get("total_drawings", 1)) * 100,
-                "title": "Improve System Reliability",
-                "description": "Some drawings failed to process entirely",
-                "affected_drawings": "Failed processing cases",
-                "suggested_improvements": [
-                    "Add comprehensive error handling",
-                    "Implement graceful degradation",
-                    "Add retry mechanisms for transient failures"
-                ],
-                "estimated_effort": "Medium",
-                "category": "reliability"
-            })
+            recommendations.append(
+                {
+                    "priority": "High",
+                    "impact_percentage": (
+                        processing_summary.get("failed_processing", 0) / processing_summary.get("total_drawings", 1)
+                    )
+                    * 100,
+                    "title": "Improve System Reliability",
+                    "description": "Some drawings failed to process entirely",
+                    "affected_drawings": "Failed processing cases",
+                    "suggested_improvements": [
+                        "Add comprehensive error handling",
+                        "Implement graceful degradation",
+                        "Add retry mechanisms for transient failures",
+                    ],
+                    "estimated_effort": "Medium",
+                    "category": "reliability",
+                }
+            )
 
         return recommendations
 
@@ -620,18 +653,21 @@ class ValidationReportGenerator:
             name = result["drawing_name"]
             drawing_info = drawings_info.get(name, {})
 
-            breakdown.append({
-                "drawing_name": name,
-                "expected_assessment": drawing_info.get("expected_assessment", "Unknown"),
-                "actual_assessment": result.get("overall_assessment", "Unknown"),
-                "components_found": result.get("components_count", 0),
-                "processing_time": result.get("processing_time_seconds", 0),
-                "test_focus": drawing_info.get("test_focus", "Unknown"),
-                "complexity": drawing_info.get("complexity", "Unknown"),
-                "status": result.get("status", "Unknown"),
-                "key_issues": self._extract_key_issues(result),
-                "performance_met_expectations": drawing_info.get("expected_assessment") == result.get("overall_assessment")
-            })
+            breakdown.append(
+                {
+                    "drawing_name": name,
+                    "expected_assessment": drawing_info.get("expected_assessment", "Unknown"),
+                    "actual_assessment": result.get("overall_assessment", "Unknown"),
+                    "components_found": result.get("components_count", 0),
+                    "processing_time": result.get("processing_time_seconds", 0),
+                    "test_focus": drawing_info.get("test_focus", "Unknown"),
+                    "complexity": drawing_info.get("complexity", "Unknown"),
+                    "status": result.get("status", "Unknown"),
+                    "key_issues": self._extract_key_issues(result),
+                    "performance_met_expectations": drawing_info.get("expected_assessment")
+                    == result.get("overall_assessment"),
+                }
+            )
 
         return breakdown
 
@@ -648,10 +684,7 @@ class ValidationReportGenerator:
 
             for suggestion in improvement_suggestions:
                 if suggestion not in issues_catalog:
-                    issues_catalog[suggestion] = {
-                        "frequency": 0,
-                        "affected_drawings": []
-                    }
+                    issues_catalog[suggestion] = {"frequency": 0, "affected_drawings": []}
                 issues_catalog[suggestion]["frequency"] += 1
                 issues_catalog[suggestion]["affected_drawings"].append(result["drawing_name"])
 
@@ -662,10 +695,16 @@ class ValidationReportGenerator:
             "total_unique_issues": len(issues_catalog),
             "most_common_issues": sorted_issues[:10],  # Top 10 most common issues
             "issue_frequency_distribution": {
-                "high_frequency_issues": len([i for i in issues_catalog.values() if i["frequency"] > len(completed_results) * 0.3]),
-                "medium_frequency_issues": len([i for i in issues_catalog.values() if 0.1 <= i["frequency"] / len(completed_results) <= 0.3]),
-                "low_frequency_issues": len([i for i in issues_catalog.values() if i["frequency"] / len(completed_results) < 0.1])
-            }
+                "high_frequency_issues": len(
+                    [i for i in issues_catalog.values() if i["frequency"] > len(completed_results) * 0.3]
+                ),
+                "medium_frequency_issues": len(
+                    [i for i in issues_catalog.values() if 0.1 <= i["frequency"] / len(completed_results) <= 0.3]
+                ),
+                "low_frequency_issues": len(
+                    [i for i in issues_catalog.values() if i["frequency"] / len(completed_results) < 0.1]
+                ),
+            },
         }
 
     def _analyze_context_patterns(self, completed_results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -673,7 +712,7 @@ class ValidationReportGenerator:
         # Placeholder for context analysis - would need more detailed tracking
         return {
             "effectiveness_summary": "Context analysis requires additional tracking in pipeline",
-            "recommendation": "Implement context usage tracking in future validation runs"
+            "recommendation": "Implement context usage tracking in future validation runs",
         }
 
     def _extract_key_issues(self, result: dict[str, Any]) -> list[str]:
@@ -690,7 +729,10 @@ class ValidationReportGenerator:
         if "incorrect" in evaluation_details.get("correctness", "").lower():
             issues.append("Accuracy issues")
 
-        if evaluation_details.get("false_positives", "") and "none" not in evaluation_details["false_positives"].lower():
+        if (
+            evaluation_details.get("false_positives", "")
+            and "none" not in evaluation_details["false_positives"].lower()
+        ):
             issues.append("False positive detections")
 
         return issues
@@ -711,45 +753,56 @@ class ValidationReportGenerator:
             f"- **Average Processing Time:** {report['executive_summary']['average_processing_time_minutes']} minutes",
             "",
             "### Key Findings",
-            ""
+            "",
         ]
 
-        for finding in report['executive_summary']['key_findings']:
+        for finding in report["executive_summary"]["key_findings"]:
             md_lines.append(f"- {finding}")
 
-        md_lines.extend([
-            "",
-            "### Priority Recommendations",
-            ""
-        ])
+        md_lines.extend(["", "### Priority Recommendations", ""])
 
-        for rec in report['executive_summary']['priority_recommendations']:
+        for rec in report["executive_summary"]["priority_recommendations"]:
             md_lines.append(f"- {rec}")
 
-        # Add detailed sections
-        md_lines.extend([
-            "",
-            "## Success Criteria Evaluation",
-            "",
-            f"- **Minimum 60% Good:** {'✅' if report['success_criteria_evaluation']['criteria_met']['minimum_60_percent_good'] else '❌'} ({report['success_criteria_evaluation']['actual_results']['good_rate']:.1%})",
-            f"- **Maximum 20% Poor:** {'✅' if report['success_criteria_evaluation']['criteria_met']['maximum_20_percent_poor'] else '❌'} ({report['success_criteria_evaluation']['actual_results']['poor_rate']:.1%})",
-            "",
-            "## Recommendations",
-            ""
-        ])
+        # Add detailed sections - extract variables for readability
+        criteria_met = report['success_criteria_evaluation']['criteria_met']
+        actual_results = report['success_criteria_evaluation']['actual_results']
 
-        for i, rec in enumerate(report['recommendations'][:10], 1):  # Top 10 recommendations
-            md_lines.extend([
-                f"### {i}. {rec['title']} ({rec['priority']} Priority)",
+        md_lines.extend(
+            [
                 "",
-                f"**Impact:** {rec['impact_percentage']:.1f}% of drawings affected",
-                f"**Description:** {rec['description']}",
-                f"**Category:** {rec['category']}",
+                "## Success Criteria Evaluation",
                 "",
-                "**Suggested Improvements:**"
-            ])
+                (
+                    f"- **Minimum 60% Good:** "
+                    f"{'✅' if criteria_met['minimum_60_percent_good'] else '❌'} "
+                    f"({actual_results['good_rate']:.1%})"
+                ),
+                (
+                    f"- **Maximum 20% Poor:** "
+                    f"{'✅' if criteria_met['maximum_20_percent_poor'] else '❌'} "
+                    f"({actual_results['poor_rate']:.1%})"
+                ),
+                "",
+                "## Recommendations",
+                "",
+            ]
+        )
 
-            for improvement in rec['suggested_improvements']:
+        for i, rec in enumerate(report["recommendations"][:10], 1):  # Top 10 recommendations
+            md_lines.extend(
+                [
+                    f"### {i}. {rec['title']} ({rec['priority']} Priority)",
+                    "",
+                    f"**Impact:** {rec['impact_percentage']:.1f}% of drawings affected",
+                    f"**Description:** {rec['description']}",
+                    f"**Category:** {rec['category']}",
+                    "",
+                    "**Suggested Improvements:**",
+                ]
+            )
+
+            for improvement in rec["suggested_improvements"]:
                 md_lines.append(f"- {improvement}")
 
             md_lines.append("")

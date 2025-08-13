@@ -66,11 +66,7 @@ class BaseAgentV2(ABC):
         """
         pass
 
-    async def save_checkpoint(
-        self,
-        stage: str,
-        data: dict[str, Any]
-    ) -> str:
+    async def save_checkpoint(self, stage: str, data: dict[str, Any]) -> str:
         """Save a checkpoint for the current processing stage.
 
         Args:
@@ -80,25 +76,24 @@ class BaseAgentV2(ABC):
         Returns:
             Checkpoint file key
         """
-        checkpoint_key = f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        checkpoint_key = (
+            f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        )
 
         checkpoint_data = {
             "job_id": self.job.job_id,
             "stage": stage,
             "agent": self.agent_name,
             "timestamp": datetime.utcnow().isoformat(),
-            "data": data
+            "data": data,
         }
 
-        content = json.dumps(checkpoint_data, indent=2).encode('utf-8')
+        content = json.dumps(checkpoint_data, indent=2).encode("utf-8")
         await self.storage.save_file(checkpoint_key, content)
         logger.info(f"Saved checkpoint for job {self.job.job_id} at stage {stage}")
         return checkpoint_key
 
-    async def load_checkpoint(
-        self,
-        stage: str
-    ) -> dict[str, Any] | None:
+    async def load_checkpoint(self, stage: str) -> dict[str, Any] | None:
         """Load a checkpoint for a specific stage.
 
         Args:
@@ -107,12 +102,14 @@ class BaseAgentV2(ABC):
         Returns:
             Checkpoint data if exists, None otherwise
         """
-        checkpoint_key = f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        checkpoint_key = (
+            f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        )
 
         try:
             if await self.storage.file_exists(checkpoint_key):
                 content = await self.storage.get_file(checkpoint_key)
-                checkpoint_data = json.loads(content.decode('utf-8'))
+                checkpoint_data = json.loads(content.decode("utf-8"))
                 logger.info(f"Loaded checkpoint for job {self.job.job_id} at stage {stage}")
                 result = checkpoint_data.get("data")
                 return result if result is not None else None
@@ -137,10 +134,7 @@ class BaseAgentV2(ABC):
         return uploaded_file
 
     def generate_content(
-        self,
-        model_name: str,
-        contents: list[Any],
-        generation_config: dict[str, Any] | None = None
+        self, model_name: str, contents: list[Any], generation_config: dict[str, Any] | None = None
     ) -> Any:
         """Generate content using the specified model.
 
@@ -162,18 +156,12 @@ class BaseAgentV2(ABC):
         from google.genai import types
 
         response = self.client.models.generate_content(
-            model=model_name,
-            contents=contents,
-            config=types.GenerateContentConfig(**config)
+            model=model_name, contents=contents, config=types.GenerateContentConfig(**config)
         )
 
         return response
 
-    async def _generate_with_retry(
-        self,
-        prompt: str | list[Any],
-        model_name: str | None = None
-    ) -> Any:
+    async def _generate_with_retry(self, prompt: str | list[Any], model_name: str | None = None) -> Any:
         """Generate content with retry logic (compatibility method).
 
         Args:
@@ -191,10 +179,7 @@ class BaseAgentV2(ABC):
         contents = [prompt] if isinstance(prompt, str) else prompt
 
         # The GenAI SDK has built-in retry logic
-        return self.generate_content(
-            model_name=model_name,
-            contents=contents
-        )
+        return self.generate_content(model_name=model_name, contents=contents)
 
     def handle_error(self, error: Exception) -> dict[str, Any]:
         """Handle common errors with appropriate responses.
@@ -205,10 +190,7 @@ class BaseAgentV2(ABC):
         Returns:
             Error information dict
         """
-        error_info: dict[str, Any] = {
-            "error": str(error),
-            "type": type(error).__name__
-        }
+        error_info: dict[str, Any] = {"error": str(error), "type": type(error).__name__}
 
         # Map common errors to user-friendly messages
         if "API_KEY_INVALID" in str(error):
@@ -264,7 +246,7 @@ class BaseAgentV2(ABC):
             "agent": self.agent_name,
             "client": self.job.client_name,
             "project": self.job.project_name,
-            **kwargs
+            **kwargs,
         }
 
         getattr(logger, level)(message, extra=extra_data)

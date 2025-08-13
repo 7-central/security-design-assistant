@@ -59,7 +59,7 @@ def classify_context(
     context_file_content: bytes | None = None,
     context_text: str | None = None,
     mime_type: str | None = None,
-    filename: str | None = None
+    filename: str | None = None,
 ) -> ContextClassification | None:
     """
     Classify the type and format of context input.
@@ -184,8 +184,8 @@ def validate_file_extension(file_path: str | Path, allowed_extensions: list[str]
         normalized_extensions = []
         for ext in allowed_extensions:
             ext = ext.lower()
-            if not ext.startswith('.'):
-                ext = '.' + ext
+            if not ext.startswith("."):
+                ext = "." + ext
             normalized_extensions.append(ext)
 
         if not file_extension:
@@ -237,7 +237,7 @@ def validate_path_no_special_chars(file_path: str | Path) -> tuple[bool, str]:
         return False, "File path is empty"
 
     # Define dangerous characters
-    dangerous_chars = ['<', '>', '|', '&', ';', '$', '`', '\n', '\r', '\x00']
+    dangerous_chars = ["<", ">", "|", "&", ";", "$", "`", "\n", "\r", "\x00"]
 
     path_str = str(file_path)
 

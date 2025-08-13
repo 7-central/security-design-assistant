@@ -40,7 +40,7 @@ class TimeoutApproachingError(LambdaError):
         super().__init__(
             message or f"Lambda timeout approaching, {remaining_time:.1f}s remaining",
             "LAMBDA_TIMEOUT_APPROACHING",
-            {"remaining_time": remaining_time}
+            {"remaining_time": remaining_time},
         )
 
 
@@ -51,7 +51,7 @@ class MemoryExhaustedError(LambdaError):
         super().__init__(
             f"Lambda memory exhausted (usage: {current_usage}MB, limit: {limit}MB)",
             "LAMBDA_MEMORY_EXHAUSTED",
-            {"current_usage_mb": current_usage, "limit_mb": limit}
+            {"current_usage_mb": current_usage, "limit_mb": limit},
         )
 
 
@@ -66,8 +66,8 @@ class ProcessingStageError(LambdaError):
                 "stage": stage,
                 "job_id": job_id,
                 "original_error": str(original_error),
-                "original_error_type": type(original_error).__name__
-            }
+                "original_error_type": type(original_error).__name__,
+            },
         )
 
 
@@ -88,10 +88,7 @@ def create_correlation_id(job_id: str | None = None) -> str:
 
 
 def log_structured_error(
-    error: Exception,
-    context: dict[str, Any],
-    correlation_id: str | None = None,
-    job_id: str | None = None
+    error: Exception, context: dict[str, Any], correlation_id: str | None = None, job_id: str | None = None
 ) -> None:
     """
     Log error with structured format for CloudWatch analysis.
@@ -112,7 +109,7 @@ def log_structured_error(
             "message": str(error),
             "traceback": traceback.format_exc(),
         },
-        "context": context
+        "context": context,
     }
 
     if job_id:
@@ -120,11 +117,7 @@ def log_structured_error(
 
     # Add Lambda-specific error details
     if isinstance(error, LambdaError):
-        error_data["error"].update({
-            "error_code": error.error_code,
-            "details": error.details,
-            "lambda_error": True
-        })
+        error_data["error"].update({"error_code": error.error_code, "details": error.details, "lambda_error": True})
 
     logger.error(json.dumps(error_data))
 
@@ -133,7 +126,7 @@ def check_lambda_timeout(
     context: Any,
     start_time: float,
     buffer_seconds: int = DEFAULT_LAMBDA_TIMEOUT_BUFFER_SECONDS,
-    job_id: str | None = None
+    job_id: str | None = None,
 ) -> None:
     """
     Check if Lambda timeout is approaching and raise error if needed.
@@ -163,19 +156,16 @@ def check_lambda_timeout(
             {
                 "remaining_time": remaining_time,
                 "buffer_seconds": buffer_seconds,
-                "elapsed_time": time.time() - start_time
+                "elapsed_time": time.time() - start_time,
             },
             correlation_id,
-            job_id
+            job_id,
         )
 
         raise TimeoutApproachingError(remaining_time)
 
 
-def check_memory_usage(
-    threshold_percent: float = DEFAULT_MEMORY_THRESHOLD_PERCENT,
-    job_id: str | None = None
-) -> None:
+def check_memory_usage(threshold_percent: float = DEFAULT_MEMORY_THRESHOLD_PERCENT, job_id: str | None = None) -> None:
     """
     Check Lambda memory usage and warn/error if threshold exceeded.
 
@@ -198,7 +188,7 @@ def check_memory_usage(
         current_usage_mb = memory_info.rss / (1024 * 1024)
 
         # Get Lambda memory limit from environment
-        memory_limit_mb = int(os.getenv('AWS_LAMBDA_FUNCTION_MEMORY_SIZE', '1024'))
+        memory_limit_mb = int(os.getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE", "1024"))
 
         usage_percent = (current_usage_mb / memory_limit_mb) * 100
 
@@ -211,10 +201,10 @@ def check_memory_usage(
                     "memory_usage_mb": current_usage_mb,
                     "memory_limit_mb": memory_limit_mb,
                     "usage_percent": usage_percent,
-                    "threshold_percent": threshold_percent
+                    "threshold_percent": threshold_percent,
                 },
                 correlation_id,
-                job_id
+                job_id,
             )
 
             if usage_percent >= CRITICAL_MEMORY_THRESHOLD_PERCENT:
@@ -230,14 +220,7 @@ def check_memory_usage(
 
 
 async def handle_processing_stage(
-    stage_name: str,
-    stage_func: callable,
-    job_id: str,
-    storage,
-    context: Any,
-    start_time: float,
-    *args,
-    **kwargs
+    stage_name: str, stage_func: callable, job_id: str, storage, context: Any, start_time: float, *args, **kwargs
 ) -> Any:
     """
     Handle a processing stage with comprehensive error handling.
@@ -269,33 +252,37 @@ async def handle_processing_stage(
         check_memory_usage(job_id=job_id)
 
         # Update job status
-        await update_job_stage_status(
-            storage, job_id, stage_name, "in_progress", correlation_id
-        )
+        await update_job_stage_status(storage, job_id, stage_name, "in_progress", correlation_id)
 
-        logger.info(json.dumps({
-            "event_type": "stage_start",
-            "timestamp": int(time.time()),
-            "correlation_id": correlation_id,
-            "job_id": job_id,
-            "stage": stage_name
-        }))
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "stage_start",
+                    "timestamp": int(time.time()),
+                    "correlation_id": correlation_id,
+                    "job_id": job_id,
+                    "stage": stage_name,
+                }
+            )
+        )
 
         # Execute stage function
         result = await stage_func(*args, **kwargs)
 
         # Update job status on success
-        await update_job_stage_status(
-            storage, job_id, stage_name, "completed", correlation_id
-        )
+        await update_job_stage_status(storage, job_id, stage_name, "completed", correlation_id)
 
-        logger.info(json.dumps({
-            "event_type": "stage_complete",
-            "timestamp": int(time.time()),
-            "correlation_id": correlation_id,
-            "job_id": job_id,
-            "stage": stage_name
-        }))
+        logger.info(
+            json.dumps(
+                {
+                    "event_type": "stage_complete",
+                    "timestamp": int(time.time()),
+                    "correlation_id": correlation_id,
+                    "job_id": job_id,
+                    "stage": stage_name,
+                }
+            )
+        )
 
         return result
 
@@ -306,28 +293,21 @@ async def handle_processing_stage(
             {
                 "stage": stage_name,
                 "job_id": job_id,
-                "function_name": stage_func.__name__ if hasattr(stage_func, '__name__') else str(stage_func)
+                "function_name": stage_func.__name__ if hasattr(stage_func, "__name__") else str(stage_func),
             },
             correlation_id,
-            job_id
+            job_id,
         )
 
         # Update job status on failure
-        await update_job_stage_status(
-            storage, job_id, stage_name, "failed", correlation_id, error=str(e)
-        )
+        await update_job_stage_status(storage, job_id, stage_name, "failed", correlation_id, error=str(e))
 
         # Wrap in ProcessingStageError
         raise ProcessingStageError(stage_name, e, job_id) from e
 
 
 async def update_job_stage_status(
-    storage,
-    job_id: str,
-    stage_name: str,
-    stage_status: str,
-    correlation_id: str,
-    error: str | None = None
+    storage, job_id: str, stage_name: str, stage_status: str, correlation_id: str, error: str | None = None
 ) -> None:
     """
     Update job status with stage-based progress tracking.
@@ -363,15 +343,11 @@ async def update_job_stage_status(
             "current_stage": current_stage,
             "stages_completed": stages_completed,
             "last_checkpoint": int(time.time()),
-            "correlation_id": correlation_id
+            "correlation_id": correlation_id,
         }
 
         if error:
-            update_data["error_details"] = {
-                "stage": stage_name,
-                "error": error,
-                "timestamp": int(time.time())
-            }
+            update_data["error_details"] = {"stage": stage_name, "error": error, "timestamp": int(time.time())}
 
         # Update job data
         current_job.update(update_data)
@@ -388,7 +364,7 @@ def create_api_error_response(
     message: str,
     error_code: str | None = None,
     details: dict[str, Any] | None = None,
-    correlation_id: str | None = None
+    correlation_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Create standardized API error response.
@@ -407,7 +383,7 @@ def create_api_error_response(
     error_response = {
         "error": message,
         "timestamp": int(time.time()),
-        "correlation_id": correlation_id or create_correlation_id()
+        "correlation_id": correlation_id or create_correlation_id(),
     }
 
     if error_code:
@@ -417,15 +393,15 @@ def create_api_error_response(
         error_response["details"] = details
 
     return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-            'X-Correlation-ID': error_response["correlation_id"]
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
+            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+            "X-Correlation-ID": error_response["correlation_id"],
         },
-        'body': json.dumps(error_response)
+        "body": json.dumps(error_response),
     }
 
 
@@ -435,7 +411,7 @@ def log_lambda_metrics(
     memory_used: int | None = None,
     success: bool = True,
     error_count: int = 0,
-    job_id: str | None = None
+    job_id: str | None = None,
 ) -> None:
     """
     Log Lambda execution metrics for CloudWatch analysis.
@@ -455,7 +431,7 @@ def log_lambda_metrics(
         "function_name": function_name,
         "execution_time_seconds": execution_time,
         "success": success,
-        "error_count": error_count
+        "error_count": error_count,
     }
 
     if memory_used:

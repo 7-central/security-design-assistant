@@ -10,7 +10,6 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF"]
 # Minimal ignores for practical development
 ignore = [
-    "E501",  # Line too long - handled by formatter, many in comments/strings
     "N806",  # Variable in function should be lowercase (mock class names in tests)
     "SIM117", # Use single with statement (can be less readable)
     "B904",  # Raise from (can fix later)

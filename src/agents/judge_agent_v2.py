@@ -33,9 +33,11 @@ class JudgeAgentV2(BaseAgentV2):
 
     def _get_fallback_prompt(self) -> str:
         """Get fallback prompt if template file is not available."""
-        return """You are evaluating the quality of a security drawing processing pipeline that extracts access control components.
+        return """
+You are evaluating the quality of a security drawing processing pipeline that extracts access control components.
 
-Pipeline Scope: This system extracts access control components (readers, exit buttons, door controllers, etc.) from security drawings and generates Excel schedules.
+Pipeline Scope: This system extracts access control components (readers, exit buttons, door controllers, etc.)
+from security drawings and generates Excel schedules.
 
 {drawing_info}
 
@@ -109,7 +111,12 @@ Provide your evaluation in the following JSON format:
             # Show first 5 components as examples
             components_info += "Sample components:\n"
             for comp in components[:5]:
-                components_info += f"  - ID: {comp.get('id', 'N/A')}, Type: {comp.get('type', 'N/A')}, Location: {comp.get('location', 'N/A')}\n"
+                components_info += (
+                    f"  - ID: {comp.get('id', 'N/A')}, "
+                    f"Type: {comp.get('type', 'N/A')}, "
+                    f"Location: {comp.get('location', 'N/A')}\
+"
+                )
             if len(components) > 5:
                 components_info += f"  ... and {len(components) - 5} more components\n"
 

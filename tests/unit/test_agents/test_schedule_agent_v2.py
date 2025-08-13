@@ -32,16 +32,16 @@ def sample_job():
         status=JobStatus.PROCESSING,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        file_path="test_drawing.pdf"
+        file_path="test_drawing.pdf",
     )
 
 
 @pytest.fixture
 def schedule_agent_v2(mock_storage, sample_job):
     """Create a Schedule Agent V2 instance."""
-    with patch('src.agents.base_agent_v2.settings') as mock_base_settings:
+    with patch("src.agents.base_agent_v2.settings") as mock_base_settings:
         mock_base_settings.gemini_api_key = "test-api-key"
-        with patch('src.agents.schedule_agent_v2.settings') as mock_settings:
+        with patch("src.agents.schedule_agent_v2.settings") as mock_settings:
             mock_settings.gemini_api_key = "test-api-key"
             mock_settings.gemini_model = "gemini-2.5-pro"
             agent = ScheduleAgentV2(mock_storage, sample_job)
@@ -56,9 +56,9 @@ class TestScheduleAgentV2:
 
     def test_initialization(self, mock_storage, sample_job):
         """Test agent initialization."""
-        with patch('src.agents.base_agent_v2.settings') as mock_settings:
+        with patch("src.agents.base_agent_v2.settings") as mock_settings:
             mock_settings.gemini_api_key = "test-api-key"
-            with patch('src.agents.schedule_agent_v2.settings') as mock_settings2:
+            with patch("src.agents.schedule_agent_v2.settings") as mock_settings2:
                 mock_settings2.gemini_api_key = "test-api-key"
                 agent = ScheduleAgentV2(mock_storage, sample_job)
                 assert agent.storage == mock_storage
@@ -67,7 +67,7 @@ class TestScheduleAgentV2:
 
     def test_initialization_no_api_key(self, mock_storage, sample_job):
         """Test initialization fails without API key."""
-        with patch('src.agents.base_agent_v2.settings') as mock_settings:
+        with patch("src.agents.base_agent_v2.settings") as mock_settings:
             mock_settings.gemini_api_key = None
             agent = ScheduleAgentV2(mock_storage, sample_job)
             # With lazy loading, the error occurs when accessing the client
@@ -104,7 +104,7 @@ class TestScheduleAgentV2:
             location="Main entrance",
             page_number=1,
             confidence=0.95,
-            attributes={"lock_type": "11"}
+            attributes={"lock_type": "11"},
         )
         assert component.id == "A-101-DR-B2"
         assert component.type == "door"
@@ -120,7 +120,7 @@ class TestScheduleAgentV2:
             page_number=1,
             confidence=0.95,
             reasoning="Identified based on door symbol and Type 11 lock specification from context",
-            attributes={"lock_type": "11"}
+            attributes={"lock_type": "11"},
         )
         assert component.reasoning == "Identified based on door symbol and Type 11 lock specification from context"
         assert component.confidence == 0.95
@@ -132,14 +132,8 @@ class TestScheduleAgentV2:
             PageComponents(
                 page_num=1,
                 components=[
-                    Component(
-                        id="A-101-DR-B2",
-                        type="door",
-                        location="Main entrance",
-                        page_number=1,
-                        confidence=0.95
-                    )
-                ]
+                    Component(id="A-101-DR-B2", type="door", location="Main entrance", page_number=1, confidence=0.95)
+                ],
             )
         ]
 
@@ -151,21 +145,13 @@ class TestScheduleAgentV2:
         """Test context filtering for relevance."""
         context_data = {
             "sections": [
-                {
-                    "title": "Door Hardware",
-                    "content": "Type 11 locks for main doors",
-                    "type": "specification"
-                },
-                {
-                    "title": "Building History",
-                    "content": "Built in 1990, renovated in 2010",
-                    "type": "general"
-                },
+                {"title": "Door Hardware", "content": "Type 11 locks for main doors", "type": "specification"},
+                {"title": "Building History", "content": "Built in 1990, renovated in 2010", "type": "general"},
                 {
                     "title": "Card Readers",
                     "content": "P-type and E-type readers for access control",
-                    "type": "specification"
-                }
+                    "type": "specification",
+                },
             ]
         }
 
@@ -198,7 +184,7 @@ class TestScheduleAgentV2:
                 {
                     "title": f"Section {i}",
                     "content": "door lock hardware " * 200,  # Large content
-                    "type": "specification"
+                    "type": "specification",
                 }
                 for i in range(10)
             ]
@@ -214,16 +200,8 @@ class TestScheduleAgentV2:
         """Test that specifications are prioritized over general sections."""
         context = {
             "sections": [
-                {
-                    "title": "General Info",
-                    "content": "door information",
-                    "type": "general"
-                },
-                {
-                    "title": "Door Specs",
-                    "content": "door lock type",
-                    "type": "specification"
-                }
+                {"title": "General Info", "content": "door information", "type": "general"},
+                {"title": "Door Specs", "content": "door lock type", "type": "specification"},
             ]
         }
 
@@ -259,16 +237,12 @@ class TestScheduleAgentV2:
     async def test_process_with_context_loading(self, schedule_agent_v2, sample_job):
         """Test that process attempts to load context checkpoint."""
         # Mock context checkpoint
-        sample_context = {
-            "sections": [
-                {"title": "Test", "content": "door lock", "type": "specification"}
-            ]
-        }
+        sample_context = {"sections": [{"title": "Test", "content": "door lock", "type": "specification"}]}
         # Use AsyncMock to return the value properly
         schedule_agent_v2.storage.get_file = AsyncMock(return_value=json.dumps(sample_context))
 
         # Mock extract_components to prevent full execution
-        with patch.object(schedule_agent_v2, '_extract_components', new=AsyncMock()) as mock_extract:
+        with patch.object(schedule_agent_v2, "_extract_components", new=AsyncMock()) as mock_extract:
             mock_extract.return_value = ComponentExtractionResult(pages=[])
 
             # Execute
@@ -285,7 +259,7 @@ class TestScheduleAgentV2:
         schedule_agent_v2.storage.get_file.side_effect = Exception("Not found")
 
         # Mock extract_components
-        with patch.object(schedule_agent_v2, '_extract_components') as mock_extract:
+        with patch.object(schedule_agent_v2, "_extract_components") as mock_extract:
             mock_extract.return_value = ComponentExtractionResult(pages=[])
 
             # Should not fail

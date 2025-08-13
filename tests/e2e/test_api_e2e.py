@@ -38,20 +38,16 @@ Please list them with all their relevant information and attributes."""
     # Upload and process
     start_time = time.time()
 
-    with open(test_pdf_path, 'rb') as f:
-        files = {'drawing_file': ('103P3-E34-QCI-40098_Ver1.pdf', f, 'application/pdf')}
+    with open(test_pdf_path, "rb") as f:
+        files = {"drawing_file": ("103P3-E34-QCI-40098_Ver1.pdf", f, "application/pdf")}
         data = {
-            'client_name': 'api_test_client',
-            'project_name': 'api_e2e_test',
-            'context_text': context_text  # Add context like production
+            "client_name": "api_test_client",
+            "project_name": "api_e2e_test",
+            "context_text": context_text,  # Add context like production
         }
 
         print("\n🚀 Sending request to /process-drawing endpoint...")
-        response = client.post(
-            "/process-drawing",
-            files=files,
-            data=data
-        )
+        response = client.post("/process-drawing", files=files, data=data)
 
     elapsed = time.time() - start_time
 
@@ -64,25 +60,27 @@ Please list them with all their relevant information and attributes."""
         print(f"   Job ID: {result.get('job_id', 'N/A')}")
         print(f"   Status: {result.get('status', 'N/A')}")
 
-        if 'file_path' in result:
+        if "file_path" in result:
             print(f"   Excel file: {result['file_path']}")
 
-        if 'summary' in result:
-            summary = result['summary']
-            print(f"   Components found: {summary.get('doors_found', 0)} doors, "
-                  f"{summary.get('readers_found', 0)} readers, "
-                  f"{summary.get('exit_buttons_found', 0)} exit buttons")
+        if "summary" in result:
+            summary = result["summary"]
+            print(
+                f"   Components found: {summary.get('doors_found', 0)} doors, "
+                f"{summary.get('readers_found', 0)} readers, "
+                f"{summary.get('exit_buttons_found', 0)} exit buttons"
+            )
 
         # Show context processing
-        if 'metadata' in result and 'context_processing' in result['metadata']:
-            context_info = result['metadata']['context_processing']
+        if "metadata" in result and "context_processing" in result["metadata"]:
+            context_info = result["metadata"]["context_processing"]
             print("\n📝 Context Processing:")
             print(f"   Type: {context_info.get('type', 'N/A')}")
             print(f"   Sections found: {context_info.get('sections_found', 'N/A')}")
             print(f"   Tokens used: {context_info.get('tokens_used', 'N/A')}")
 
         # Try to get Judge evaluation from job status endpoint
-        job_id = result.get('job_id')
+        job_id = result.get("job_id")
         if job_id:
             print("\n🔍 Fetching full job details including Judge evaluation...")
             status_response = client.get(f"/status/{job_id}")
@@ -90,27 +88,30 @@ Please list them with all their relevant information and attributes."""
                 job_details = status_response.json()
 
                 # Show evaluation if present
-                if 'evaluation' in job_details:
-                    eval_data = job_details['evaluation']
+                if "evaluation" in job_details:
+                    eval_data = job_details["evaluation"]
                     print("\n🎯 Judge Evaluation:")
                     print(f"   Overall: {eval_data.get('overall_assessment', 'N/A')}")
                     print(f"   Completeness: {eval_data.get('completeness', 'N/A')}")
                     print(f"   Correctness: {eval_data.get('correctness', 'N/A')}")
-                    if 'improvement_suggestions' in eval_data:
-                        suggestions = eval_data['improvement_suggestions']
+                    if "improvement_suggestions" in eval_data:
+                        suggestions = eval_data["improvement_suggestions"]
                         if suggestions:
-                            print(f"   Suggestions: {suggestions[:2] if isinstance(suggestions, list) else str(suggestions)[:100]}...")
+                            print(
+                                f"   Suggestions: "
+                                f"{suggestions[:2] if isinstance(suggestions, list) else str(suggestions)[:100]}..."
+                            )
                 else:
                     print("   (Judge evaluation not included in status response)")
             else:
                 print(f"   Could not fetch job status: {status_response.status_code}")
 
         # Show file location
-        if 'file_path' in result:
+        if "file_path" in result:
             excel_path = f"local_output/{result['file_path']}"
             print("\n📄 Files created:")
             print(f"   Excel schedule: {excel_path}")
-            print(f"   Use: open \"{excel_path}\" to view")
+            print(f'   Use: open "{excel_path}" to view')
 
         print("\n✅ API test passed!")
         return True
@@ -125,4 +126,5 @@ if __name__ == "__main__":
     import sys
 
     import pytest
+
     sys.exit(pytest.main([__file__, "-v"]))

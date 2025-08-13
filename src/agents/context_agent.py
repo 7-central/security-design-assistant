@@ -146,7 +146,8 @@ class ContextAgent(BaseAgentV2):
             uploaded_file = self.upload_file(str(file_path))
 
             # Build multimodal prompt
-            prompt = """Analyze this PDF document and extract structured information for a security access control system.
+            prompt = """
+Analyze this PDF document and extract structured information for a security access control system.
 
 Extract the following:
 1. Lock types and specifications (especially types 11-22 if present)

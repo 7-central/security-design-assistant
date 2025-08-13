@@ -17,11 +17,13 @@ logger = logging.getLogger(__name__)
 
 class RetryExhaustedException(Exception):
     """Raised when maximum retry attempts are exceeded."""
+
     pass
 
 
 class RateLimitExceededException(Exception):
     """Raised when rate limit is exceeded and cannot be retried."""
+
     pass
 
 
@@ -33,7 +35,7 @@ async def retry_with_exponential_backoff(
     max_delay: float = 60.0,
     jitter: bool = True,
     context_timeout_remaining: float | None = None,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """
     Retry function with exponential backoff and Gemini-specific error handling.
@@ -62,15 +64,13 @@ async def retry_with_exponential_backoff(
         try:
             # Check if we have enough time for this attempt
             if context_timeout_remaining:
-                estimated_time = base_delay * (2 ** attempt)
+                estimated_time = base_delay * (2**attempt)
                 if context_timeout_remaining < estimated_time + 30:  # 30s buffer
                     logger.warning(
                         f"Insufficient time remaining ({context_timeout_remaining}s) "
                         f"for retry attempt {attempt}, estimated time: {estimated_time}s"
                     )
-                    raise RetryExhaustedException(
-                        f"Timeout approaching, cannot complete retry attempt {attempt}"
-                    )
+                    raise RetryExhaustedException(f"Timeout approaching, cannot complete retry attempt {attempt}")
 
             # Execute function
             result = await func(*args, **kwargs)
@@ -89,9 +89,7 @@ async def retry_with_exponential_backoff(
 
             if attempt >= max_retries:
                 logger.error(f"Rate limit exceeded, max retries ({max_retries}) reached")
-                raise RateLimitExceededException(
-                    f"Gemini API rate limit exceeded after {max_retries} attempts"
-                ) from e
+                raise RateLimitExceededException(f"Gemini API rate limit exceeded after {max_retries} attempts") from e
 
             # Calculate delay based on rate limit reset time or exponential backoff
             if rate_limit_reset:
@@ -110,12 +108,9 @@ async def retry_with_exponential_backoff(
             # Check if we have time to wait and retry
             if context_timeout_remaining and context_timeout_remaining < delay + 30:
                 logger.warning(
-                    f"Insufficient time remaining ({context_timeout_remaining}s) "
-                    f"for delay ({delay}s), cannot retry"
+                    f"Insufficient time remaining ({context_timeout_remaining}s) " f"for delay ({delay}s), cannot retry"
                 )
-                raise RateLimitExceededException(
-                    "Timeout approaching, cannot wait for rate limit reset"
-                ) from e
+                raise RateLimitExceededException("Timeout approaching, cannot wait for rate limit reset") from e
 
             await asyncio.sleep(delay)
 
@@ -130,15 +125,10 @@ async def retry_with_exponential_backoff(
 
             if attempt >= max_retries:
                 logger.error(f"Request timeout, max retries ({max_retries}) reached")
-                raise RetryExhaustedException(
-                    f"Gemini API timeout after {max_retries} attempts"
-                ) from e
+                raise RetryExhaustedException(f"Gemini API timeout after {max_retries} attempts") from e
 
             delay = _calculate_exponential_backoff(attempt, base_delay, max_delay, jitter)
-            logger.warning(
-                f"Request timeout (attempt {attempt + 1}/{max_retries + 1}), "
-                f"retrying in {delay}s"
-            )
+            logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries + 1}), " f"retrying in {delay}s")
 
             await asyncio.sleep(delay)
 
@@ -148,15 +138,10 @@ async def retry_with_exponential_backoff(
 
             if attempt >= max_retries:
                 logger.error(f"Service unavailable, max retries ({max_retries}) reached")
-                raise RetryExhaustedException(
-                    f"Gemini API service unavailable after {max_retries} attempts"
-                ) from e
+                raise RetryExhaustedException(f"Gemini API service unavailable after {max_retries} attempts") from e
 
             delay = _calculate_exponential_backoff(attempt, base_delay, max_delay, jitter)
-            logger.warning(
-                f"Service unavailable (attempt {attempt + 1}/{max_retries + 1}), "
-                f"retrying in {delay}s"
-            )
+            logger.warning(f"Service unavailable (attempt {attempt + 1}/{max_retries + 1}), " f"retrying in {delay}s")
 
             await asyncio.sleep(delay)
 
@@ -166,19 +151,12 @@ async def retry_with_exponential_backoff(
             raise
 
     # Should never reach here, but just in case
-    raise RetryExhaustedException(
-        f"Max retries ({max_retries}) exceeded"
-    ) from last_exception
+    raise RetryExhaustedException(f"Max retries ({max_retries}) exceeded") from last_exception
 
 
-def _calculate_exponential_backoff(
-    attempt: int,
-    base_delay: float,
-    max_delay: float,
-    jitter: bool
-) -> float:
+def _calculate_exponential_backoff(attempt: int, base_delay: float, max_delay: float, jitter: bool) -> float:
     """Calculate exponential backoff delay with optional jitter."""
-    delay = min(base_delay * (2 ** attempt), max_delay)
+    delay = min(base_delay * (2**attempt), max_delay)
 
     if jitter:
         # Add ±25% jitter
@@ -201,18 +179,18 @@ def _extract_rate_limit_reset(exception: google_exceptions.ResourceExhausted) ->
     """
     try:
         # Try to extract from exception metadata
-        if hasattr(exception, 'response') and exception.response:
-            headers = getattr(exception.response, 'headers', {})
+        if hasattr(exception, "response") and exception.response:
+            headers = getattr(exception.response, "headers", {})
 
             # Look for common rate limit headers
             reset_time = None
-            if 'retry-after' in headers:
-                reset_time = float(headers['retry-after'])
-            elif 'x-ratelimit-reset' in headers:
-                reset_timestamp = int(headers['x-ratelimit-reset'])
+            if "retry-after" in headers:
+                reset_time = float(headers["retry-after"])
+            elif "x-ratelimit-reset" in headers:
+                reset_timestamp = int(headers["x-ratelimit-reset"])
                 reset_time = max(0, reset_timestamp - int(time.time()))
-            elif 'x-ratelimit-reset-after' in headers:
-                reset_time = float(headers['x-ratelimit-reset-after'])
+            elif "x-ratelimit-reset-after" in headers:
+                reset_time = float(headers["x-ratelimit-reset-after"])
 
             if reset_time:
                 logger.info(f"Found rate limit reset time: {reset_time}s")
@@ -238,45 +216,31 @@ async def check_gemini_rate_limits(client, model: str) -> dict[str, Any]:
     try:
         # Make a minimal request to check rate limits
         # This is a placeholder - actual implementation depends on available API
-        response = await client.models.generate_content(
-            model=model,
-            contents=["test"],
-            config={'max_output_tokens': 1}
-        )
+        response = await client.models.generate_content(model=model, contents=["test"], config={"max_output_tokens": 1})
 
         # Extract rate limit info from response headers if available
-        rate_limit_info = {
-            'requests_remaining': None,
-            'tokens_remaining': None,
-            'reset_time': None,
-            'status': 'ok'
-        }
+        rate_limit_info = {"requests_remaining": None, "tokens_remaining": None, "reset_time": None, "status": "ok"}
 
         # This would need to be adapted based on actual Gemini API headers
-        if hasattr(response, 'headers'):
+        if hasattr(response, "headers"):
             headers = response.headers
-            if 'x-ratelimit-requests-remaining' in headers:
-                rate_limit_info['requests_remaining'] = int(headers['x-ratelimit-requests-remaining'])
-            if 'x-ratelimit-tokens-remaining' in headers:
-                rate_limit_info['tokens_remaining'] = int(headers['x-ratelimit-tokens-remaining'])
-            if 'x-ratelimit-reset' in headers:
-                rate_limit_info['reset_time'] = int(headers['x-ratelimit-reset'])
+            if "x-ratelimit-requests-remaining" in headers:
+                rate_limit_info["requests_remaining"] = int(headers["x-ratelimit-requests-remaining"])
+            if "x-ratelimit-tokens-remaining" in headers:
+                rate_limit_info["tokens_remaining"] = int(headers["x-ratelimit-tokens-remaining"])
+            if "x-ratelimit-reset" in headers:
+                rate_limit_info["reset_time"] = int(headers["x-ratelimit-reset"])
 
         return rate_limit_info
 
     except google_exceptions.ResourceExhausted as e:
         return {
-            'requests_remaining': 0,
-            'tokens_remaining': 0,
-            'reset_time': _extract_rate_limit_reset(e),
-            'status': 'rate_limited'
+            "requests_remaining": 0,
+            "tokens_remaining": 0,
+            "reset_time": _extract_rate_limit_reset(e),
+            "status": "rate_limited",
         }
 
     except Exception as e:
         logger.error(f"Error checking rate limits: {e}")
-        return {
-            'requests_remaining': None,
-            'tokens_remaining': None,
-            'reset_time': None,
-            'status': 'error'
-        }
+        return {"requests_remaining": None, "tokens_remaining": None, "reset_time": None, "status": "error"}

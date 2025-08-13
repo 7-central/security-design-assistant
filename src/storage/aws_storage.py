@@ -22,13 +22,13 @@ class AWSStorage(StorageInterface):
         config = Config(
             max_pool_connections=50,  # Increase connection pool size
             retries={
-                'max_attempts': 3,
-                'mode': 'adaptive'  # Use adaptive retry mode
-            }
+                "max_attempts": 3,
+                "mode": "adaptive",  # Use adaptive retry mode
+            },
         )
 
-        self.s3_client = boto3.client('s3', config=config)
-        self.dynamodb = boto3.resource('dynamodb', config=config)
+        self.s3_client = boto3.client("s3", config=config)
+        self.dynamodb = boto3.resource("dynamodb", config=config)
 
         # S3 metadata cache for performance optimization
         self._metadata_cache = {}
@@ -62,17 +62,12 @@ class AWSStorage(StorageInterface):
         try:
             extra_args = {}
             if metadata:
-                extra_args['Metadata'] = {k: str(v) for k, v in metadata.items()}
+                extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
 
             # Use Intelligent Tiering for cost optimization
-            extra_args['StorageClass'] = 'INTELLIGENT_TIERING'
+            extra_args["StorageClass"] = "INTELLIGENT_TIERING"
 
-            self.s3_client.put_object(
-                Bucket=self.s3_bucket,
-                Key=key,
-                Body=content,
-                **extra_args
-            )
+            self.s3_client.put_object(Bucket=self.s3_bucket, Key=key, Body=content, **extra_args)
 
             # Cache metadata for performance
             if metadata:
@@ -96,16 +91,13 @@ class AWSStorage(StorageInterface):
             File content as bytes
         """
         try:
-            response = self.s3_client.get_object(
-                Bucket=self.s3_bucket,
-                Key=key
-            )
-            content = response['Body'].read()
+            response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=key)
+            content = response["Body"].read()
             logger.info(f"Successfully retrieved file from S3: s3://{self.s3_bucket}/{key}")
             return content
 
         except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchKey':
+            if e.response["Error"]["Code"] == "NoSuchKey":
                 raise FileNotFoundError(f"File not found: {key}")
             logger.error(f"Failed to retrieve file from S3: {e}")
             raise
@@ -121,13 +113,10 @@ class AWSStorage(StorageInterface):
             True if file exists, False otherwise
         """
         try:
-            self.s3_client.head_object(
-                Bucket=self.s3_bucket,
-                Key=key
-            )
+            self.s3_client.head_object(Bucket=self.s3_bucket, Key=key)
             return True
         except ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 return False
             logger.error(f"Error checking file existence in S3: {e}")
             raise
@@ -143,10 +132,7 @@ class AWSStorage(StorageInterface):
             True if file was deleted, False if it didn't exist
         """
         try:
-            self.s3_client.delete_object(
-                Bucket=self.s3_bucket,
-                Key=key
-            )
+            self.s3_client.delete_object(Bucket=self.s3_bucket, Key=key)
             logger.info(f"Successfully deleted file from S3: s3://{self.s3_bucket}/{key}")
             return True
 
@@ -181,34 +167,35 @@ class AWSStorage(StorageInterface):
         """
         try:
             # Create the composite key for the job
-            company_client_job = status_data.get('company_client_job', f"7central#unknown#{job_id}")
+            company_client_job = status_data.get("company_client_job", f"7central#unknown#{job_id}")
 
             # Prepare the item for DynamoDB
             item = {
-                'company#client#job': company_client_job,
-                'job_id': job_id,
-                'updated_at': int(time.time()),
-                **status_data
+                "company#client#job": company_client_job,
+                "job_id": job_id,
+                "updated_at": int(time.time()),
+                **status_data,
             }
 
             # Convert floats to Decimal for DynamoDB compatibility
             item = self._convert_floats_to_decimal(item)
 
             # Set TTL for 30 days (30 * 24 * 60 * 60 seconds)
-            if 'ttl' not in item:
-                item['ttl'] = int(time.time()) + (30 * 24 * 60 * 60)
+            if "ttl" not in item:
+                item["ttl"] = int(time.time()) + (30 * 24 * 60 * 60)
 
             # Create date bucket for GSI3 (YYYY-MM format)
-            if 'created_at' in status_data:
-                created_timestamp = status_data['created_at']
+            if "created_at" in status_data:
+                created_timestamp = status_data["created_at"]
                 if isinstance(created_timestamp, int | float):
                     # Convert timestamp to YYYY-MM format
                     import datetime
+
                     date_obj = datetime.datetime.fromtimestamp(created_timestamp)
-                    item['date_bucket'] = date_obj.strftime('%Y-%m')
+                    item["date_bucket"] = date_obj.strftime("%Y-%m")
                 elif isinstance(created_timestamp, str):
                     # Assume ISO format, extract YYYY-MM
-                    item['date_bucket'] = created_timestamp[:7]
+                    item["date_bucket"] = created_timestamp[:7]
 
             self.jobs_table.put_item(Item=item)
             logger.info(f"Successfully saved job status to DynamoDB: {job_id}")
@@ -231,11 +218,10 @@ class AWSStorage(StorageInterface):
             # Since we need the full composite key, we'll use a GSI query instead
             # Query the StatusDateIndex to find the job by job_id
             response = self.jobs_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('job_id').eq(job_id),
-                Limit=1
+                FilterExpression=boto3.dynamodb.conditions.Attr("job_id").eq(job_id), Limit=1
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             if not items:
                 return None
 
@@ -258,11 +244,9 @@ class AWSStorage(StorageInterface):
             Job status data if found, None otherwise
         """
         try:
-            response = self.jobs_table.get_item(
-                Key={'company#client#job': company_client_job}
-            )
+            response = self.jobs_table.get_item(Key={"company#client#job": company_client_job})
 
-            item = response.get('Item')
+            item = response.get("Item")
             if item:
                 logger.info(f"Successfully retrieved job by composite key: {company_client_job}")
                 return dict(item)
@@ -285,9 +269,7 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': self.s3_bucket, 'Key': key},
-                ExpiresIn=expiration
+                "get_object", Params={"Bucket": self.s3_bucket, "Key": key}, ExpiresIn=expiration
             )
             logger.info(f"Generated presigned URL for: s3://{self.s3_bucket}/{key}")
             return response
@@ -309,13 +291,13 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.jobs_table.query(
-                IndexName='StatusDateIndex',
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('status').eq(status),
+                IndexName="StatusDateIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("status").eq(status),
                 ScanIndexForward=False,  # Sort by created_at descending
-                Limit=limit
+                Limit=limit,
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             logger.info(f"Retrieved {len(items)} jobs with status: {status}")
             return [dict(item) for item in items]
 
@@ -336,13 +318,13 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.jobs_table.query(
-                IndexName='ClientProjectIndex',
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('client_name').eq(client_name),
+                IndexName="ClientProjectIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("client_name").eq(client_name),
                 ScanIndexForward=False,  # Sort by created_at descending
-                Limit=limit
+                Limit=limit,
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             logger.info(f"Retrieved {len(items)} jobs for client: {client_name}")
             return [dict(item) for item in items]
 
@@ -363,13 +345,13 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.jobs_table.query(
-                IndexName='DateRangeIndex',
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('date_bucket').eq(date_bucket),
+                IndexName="DateRangeIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("date_bucket").eq(date_bucket),
                 ScanIndexForward=False,  # Sort by created_at descending
-                Limit=limit
+                Limit=limit,
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             logger.info(f"Retrieved {len(items)} jobs for date bucket: {date_bucket}")
             return [dict(item) for item in items]
 
@@ -382,7 +364,7 @@ class AWSStorage(StorageInterface):
         job_id: str,
         current_stage: str,
         stages_completed: list[str],
-        additional_data: dict[str, Any] | None = None
+        additional_data: dict[str, Any] | None = None,
     ) -> None:
         """
         Update job progress with stage-based tracking.
@@ -405,7 +387,7 @@ class AWSStorage(StorageInterface):
                 "current_stage": current_stage,
                 "stages_completed": stages_completed,
                 "last_checkpoint": int(time.time()),
-                "updated_at": int(time.time())
+                "updated_at": int(time.time()),
             }
 
             if additional_data:
@@ -435,11 +417,10 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.jobs_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('current_stage').eq(stage),
-                Limit=limit
+                FilterExpression=boto3.dynamodb.conditions.Attr("current_stage").eq(stage), Limit=limit
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             logger.info(f"Retrieved {len(items)} jobs in stage: {stage}")
             return [dict(item) for item in items]
 
@@ -459,11 +440,10 @@ class AWSStorage(StorageInterface):
         """
         try:
             response = self.jobs_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('timeout_detected').eq(True),
-                Limit=limit
+                FilterExpression=boto3.dynamodb.conditions.Attr("timeout_detected").eq(True), Limit=limit
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             logger.info(f"Retrieved {len(items)} interrupted jobs")
             return [dict(item) for item in items]
 
@@ -486,20 +466,18 @@ class AWSStorage(StorageInterface):
 
             # Query jobs older than cutoff time
             response = self.jobs_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('created_at').lt(cutoff_time),
-                ProjectionExpression='#ccj',
-                ExpressionAttributeNames={'#ccj': 'company#client#job'}
+                FilterExpression=boto3.dynamodb.conditions.Attr("created_at").lt(cutoff_time),
+                ProjectionExpression="#ccj",
+                ExpressionAttributeNames={"#ccj": "company#client#job"},
             )
 
-            items = response.get('Items', [])
+            items = response.get("Items", [])
             cleanup_count = 0
 
             # Delete old job records
             for item in items:
                 try:
-                    self.jobs_table.delete_item(
-                        Key={'company#client#job': item['company#client#job']}
-                    )
+                    self.jobs_table.delete_item(Key={"company#client#job": item["company#client#job"]})
                     cleanup_count += 1
                 except Exception as e:
                     logger.error(f"Failed to delete job record {item['company#client#job']}: {e}")
@@ -518,11 +496,7 @@ class AWSStorage(StorageInterface):
             key: S3 object key
             metadata: Metadata to cache
         """
-        cache_entry = {
-            'metadata': metadata,
-            'timestamp': time.time(),
-            'key': key
-        }
+        cache_entry = {"metadata": metadata, "timestamp": time.time(), "key": key}
         self._metadata_cache[key] = cache_entry
         logger.debug(f"Cached metadata for S3 object: {key}")
 
@@ -539,7 +513,7 @@ class AWSStorage(StorageInterface):
             return None
 
         cache_entry = self._metadata_cache[key]
-        cache_age = time.time() - cache_entry['timestamp']
+        cache_age = time.time() - cache_entry["timestamp"]
 
         if cache_age > self._cache_ttl:
             # Cache expired, remove it
@@ -548,7 +522,7 @@ class AWSStorage(StorageInterface):
             return None
 
         logger.debug(f"Cache hit for S3 object metadata: {key}")
-        return cache_entry['metadata']
+        return cache_entry["metadata"]
 
     async def get_object_metadata(self, key: str, use_cache: bool = True) -> dict[str, Any] | None:
         """Get S3 object metadata with optional caching.
@@ -567,18 +541,15 @@ class AWSStorage(StorageInterface):
                 return cached_metadata
 
         try:
-            response = self.s3_client.head_object(
-                Bucket=self.s3_bucket,
-                Key=key
-            )
+            response = self.s3_client.head_object(Bucket=self.s3_bucket, Key=key)
 
             metadata = {
-                'content_length': response['ContentLength'],
-                'last_modified': response['LastModified'],
-                'etag': response['ETag'],
-                'content_type': response.get('ContentType', 'application/octet-stream'),
-                'metadata': response.get('Metadata', {}),
-                'storage_class': response.get('StorageClass', 'STANDARD')
+                "content_length": response["ContentLength"],
+                "last_modified": response["LastModified"],
+                "etag": response["ETag"],
+                "content_type": response.get("ContentType", "application/octet-stream"),
+                "metadata": response.get("Metadata", {}),
+                "storage_class": response.get("StorageClass", "STANDARD"),
             }
 
             # Cache the metadata
@@ -589,7 +560,7 @@ class AWSStorage(StorageInterface):
             return metadata
 
         except ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 logger.warning(f"S3 object not found: {key}")
                 return None
             logger.error(f"Failed to get S3 object metadata: {e}")
@@ -611,27 +582,28 @@ class AWSStorage(StorageInterface):
         expired_entries = 0
 
         for cache_entry in self._metadata_cache.values():
-            cache_age = current_time - cache_entry['timestamp']
+            cache_age = current_time - cache_entry["timestamp"]
             if cache_age <= self._cache_ttl:
                 active_entries += 1
             else:
                 expired_entries += 1
 
         return {
-            'total_entries': len(self._metadata_cache),
-            'active_entries': active_entries,
-            'expired_entries': expired_entries,
-            'cache_ttl_seconds': self._cache_ttl
+            "total_entries": len(self._metadata_cache),
+            "active_entries": active_entries,
+            "expired_entries": expired_entries,
+            "cache_ttl_seconds": self._cache_ttl,
         }
 
     def _get_batch_processor(self):
         """Get or create S3 batch processor for request consolidation."""
         if self._batch_processor is None:
             from src.utils.s3_batch_operations import S3BatchProcessor
+
             self._batch_processor = S3BatchProcessor(
                 self.s3_client,
                 batch_size=15,  # Optimize batch size for Lambda
-                flush_interval=2.0  # Shorter interval for Lambda execution
+                flush_interval=2.0,  # Shorter interval for Lambda execution
             )
         return self._batch_processor
 
@@ -651,7 +623,7 @@ class AWSStorage(StorageInterface):
                 self.s3_client,
                 self.s3_bucket,
                 keys,
-                batch_size=20  # Higher batch size for HEAD operations
+                batch_size=20,  # Higher batch size for HEAD operations
             )
 
             logger.info(f"Batch checked existence of {len(keys)} files")
@@ -677,7 +649,7 @@ class AWSStorage(StorageInterface):
                 self.s3_client,
                 self.s3_bucket,
                 keys,
-                batch_size=10  # Conservative batch size for GET operations
+                batch_size=10,  # Conservative batch size for GET operations
             )
 
             logger.info(f"Batch retrieved {len(keys)} files")
@@ -695,13 +667,13 @@ class AWSStorage(StorageInterface):
         """
         if self._batch_processor is None:
             return {
-                'batch_processor_initialized': False,
-                'total_operations': 0,
-                'batches_processed': 0,
-                'api_calls_saved': 0,
-                'efficiency_percent': 0
+                "batch_processor_initialized": False,
+                "total_operations": 0,
+                "batches_processed": 0,
+                "api_calls_saved": 0,
+                "efficiency_percent": 0,
             }
 
         stats = self._batch_processor.get_stats()
-        stats['batch_processor_initialized'] = True
+        stats["batch_processor_initialized"] = True
         return stats
