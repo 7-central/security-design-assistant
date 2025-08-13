@@ -76,24 +76,24 @@ jobs:
           
           # Run a basic health check
           python -c "
-import boto3
-import os
-
-# Verify S3 bucket exists
-s3 = boto3.client('s3', region_name='${{ env.AWS_REGION }}')
-try:
-    s3.head_bucket(Bucket='security-assistant-dev-445567098699')
-    print('✅ S3 bucket is accessible')
-except Exception as e:
-    print(f'❌ S3 bucket error: {e}')
-    exit(1)
-
-# Verify DynamoDB table exists
-dynamodb = boto3.client('dynamodb', region_name='${{ env.AWS_REGION }}')
-try:
-    response = dynamodb.describe_table(TableName='security-assistant-dev-jobs')
-    print(f'✅ DynamoDB table is active: {response['Table']['TableStatus']}')
-except Exception as e:
-    print(f'❌ DynamoDB table error: {e}')
-    exit(1)
+            import boto3
+            import os
+            
+            # Verify S3 bucket exists
+            s3 = boto3.client('s3', region_name='${{ env.AWS_REGION }}')
+            try:
+                s3.head_bucket(Bucket='security-assistant-dev-445567098699')
+                print('✅ S3 bucket is accessible')
+            except Exception as e:
+                print(f'❌ S3 bucket error: {e}')
+                exit(1)
+            
+            # Verify DynamoDB table exists
+            dynamodb = boto3.client('dynamodb', region_name='${{ env.AWS_REGION }}')
+            try:
+                response = dynamodb.describe_table(TableName='security-assistant-dev-jobs')
+                print('✅ DynamoDB table is active: ' + response['Table']['TableStatus'])
+            except Exception as e:
+                print(f'❌ DynamoDB table error: {e}')
+                exit(1)
           "
