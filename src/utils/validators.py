@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 from typing import TypedDict
 
 import pypdf
@@ -58,7 +59,7 @@ def classify_context(
     context_file_content: bytes | None = None,
     context_text: str | None = None,
     mime_type: str | None = None,
-    filename: str | None = None
+    filename: str | None = None,
 ) -> ContextClassification | None:
     """
     Classify the type and format of context input.
@@ -116,3 +117,132 @@ def classify_context(
         return {"type": "text", "format": "file"}
 
     return None
+
+
+def validate_file_path(file_path: str | Path, must_exist: bool = False) -> tuple[bool, str]:
+    """Validate a file path for security and correctness.
+
+    Args:
+        file_path: Path to validate
+        must_exist: Whether the file must exist
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not file_path:
+        return False, "File path is empty"
+
+    try:
+        path = Path(file_path)
+
+        # Check for path traversal attempts
+        if ".." in str(path):
+            return False, "Path traversal detected"
+
+        # Check for null bytes (security issue)
+        if "\x00" in str(path):
+            return False, "Null byte in path"
+
+        # Convert to absolute path for further checks
+        abs_path = path.absolute()
+
+        # Check if path exists when required
+        if must_exist and not abs_path.exists():
+            return False, f"File does not exist: {path}"
+
+        # Check if it's a file (not directory) when it exists
+        if abs_path.exists() and abs_path.is_dir():
+            return False, f"Path is a directory, not a file: {path}"
+
+        return True, ""
+
+    except Exception as e:
+        return False, f"Invalid path: {e}"
+
+
+def validate_file_extension(file_path: str | Path, allowed_extensions: list[str]) -> tuple[bool, str]:
+    """Validate that a file has an allowed extension.
+
+    Args:
+        file_path: Path to the file
+        allowed_extensions: List of allowed extensions (with or without dots)
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not file_path:
+        return False, "File path is empty"
+
+    if not allowed_extensions:
+        return False, "No allowed extensions specified"
+
+    try:
+        path = Path(file_path)
+        file_extension = path.suffix.lower()
+
+        # Normalize allowed extensions (ensure they start with a dot)
+        normalized_extensions = []
+        for ext in allowed_extensions:
+            ext = ext.lower()
+            if not ext.startswith("."):
+                ext = "." + ext
+            normalized_extensions.append(ext)
+
+        if not file_extension:
+            return False, f"File has no extension: {path.name}"
+
+        if file_extension not in normalized_extensions:
+            return False, f"Invalid file extension '{file_extension}'. Allowed: {', '.join(normalized_extensions)}"
+
+        return True, ""
+
+    except Exception as e:
+        return False, f"Error validating extension: {e}"
+
+
+def validate_path_is_absolute(file_path: str | Path) -> tuple[bool, str]:
+    """Validate that a path is absolute (not relative).
+
+    Args:
+        file_path: Path to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not file_path:
+        return False, "File path is empty"
+
+    try:
+        path = Path(file_path)
+
+        if not path.is_absolute():
+            return False, f"Path is not absolute: {path}"
+
+        return True, ""
+
+    except Exception as e:
+        return False, f"Error validating path: {e}"
+
+
+def validate_path_no_special_chars(file_path: str | Path) -> tuple[bool, str]:
+    """Validate that a path contains no potentially dangerous special characters.
+
+    Args:
+        file_path: Path to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not file_path:
+        return False, "File path is empty"
+
+    # Define dangerous characters
+    dangerous_chars = ["<", ">", "|", "&", ";", "$", "`", "\n", "\r", "\x00"]
+
+    path_str = str(file_path)
+
+    for char in dangerous_chars:
+        if char in path_str:
+            return False, f"Path contains dangerous character: {char!r}"
+
+    return True, ""

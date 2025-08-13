@@ -78,20 +78,34 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Environment Variables
+### Environment Configuration
 
-Create a `.env` file based on `.env.example`:
+The project supports three environments with automatic resource switching:
 
+#### Local Development (File System)
 ```bash
-cp .env.example .env
+cp .env.local.example .env
+# Uses local file system for storage, no AWS resources needed
 ```
 
-Required environment variables:
+#### Development Environment (AWS Dev Resources)
+```bash
+cp .env.dev.example .env
+# Uses dev AWS resources: security-assistant-dev-* (<$1/month)
+# Requires: AWS_PROFILE=design-lee
+```
 
-- `STORAGE_MODE`: Set to "local" for local development
-- `LOCAL_OUTPUT_DIR`: Directory for output files (default: "./local_output")
+#### Production Environment
+```bash
+# Production uses environment variables set in Lambda
+# Resources: security-assistant-files (S3), security-assistant-jobs (DynamoDB)
+```
+
+Key environment variables:
+- `STORAGE_MODE`: "local" or "aws"
+- `ENV`: "local", "dev", or "prod" (determines which AWS resources to use)
 - `GEMINI_API_KEY`: Your Google GenAI API key (get from https://aistudio.google.com/app/apikey)
-- `AWS_PROFILE`: Set to "design-lee" for local AWS access (optional)
+- `AWS_PROFILE`: Set to "design-lee" for local AWS development
 
 ⚠️ **Note**: This project now uses Google's GenAI SDK instead of Vertex AI for better performance and simplified authentication.
 
@@ -132,66 +146,176 @@ API documentation: `http://localhost:8000/docs`
 
 ## Testing
 
-### End-to-End Integration Tests
+The project uses a pragmatic testing approach with fast unit tests and real E2E validation.
 
-The project includes comprehensive end-to-end tests that verify the complete pipeline from drawing submission to Excel generation.
+### Test Strategy
 
-#### Test Setup
+- **Unit Tests (90%)**: Fast, isolated tests for business logic
+- **E2E Tests (10%)**: Real API validation for critical paths
+- **Philosophy**: Real-world validation over complex mocking
 
-1. **Install test dependencies**:
+### Test Setup
+
+1. **Install dependencies** (already included in requirements.txt):
    ```bash
-   pip install pytest pytest-html httpx openpyxl
+   pip install pytest pytest-asyncio pytest-mock
    ```
 
-2. **Ensure the API is running** (for local testing):
+2. **Configure environment**:
    ```bash
-   uvicorn src.api.main:app --reload
+   # Load environment variables
+   source .env
+   
+   # Set AWS profile for E2E tests (optional)
+   export AWS_PROFILE=design-lee
+   export AWS_DEFAULT_REGION=eu-west-2
    ```
 
-#### Running E2E Tests
+### Running Tests
 
-**Quick test run**:
+#### Unit Tests Only (Fast, No Credentials Required)
 ```bash
-./scripts/run_e2e_tests.sh
+pytest -m unit
+```
+- Runs in <10 seconds
+- No external service dependencies
+- 52 tests covering core business logic
+
+#### E2E Tests (Requires Dev AWS Resources)
+
+⚠️ **Prerequisites**: E2E tests require dev AWS resources to be deployed first:
+```bash
+# Deploy dev resources (one-time setup)
+cd infrastructure
+sam deploy --template-file dev-template.yaml --stack-name security-assistant-dev \
+  --capabilities CAPABILITY_IAM --region eu-west-2 --profile design-lee \
+  --s3-bucket security-assistant-sam-deployments --no-confirm-changeset
 ```
 
-**With HTML report**:
+Run E2E tests:
 ```bash
-./scripts/run_e2e_tests.sh --report
+# Use dev environment configuration
+cp .env.dev.example .env
+source .env
+
+# Run E2E tests with dev resources
+ENV=dev pytest -m e2e
+```
+- Uses dev AWS resources (S3, DynamoDB)
+- Real Gemini API calls
+- Tests full pipeline with FastAPI server
+- 3 scenarios: full pipeline, error handling, consistency
+
+#### All Tests
+```bash
+AWS_PROFILE=design-lee pytest
 ```
 
-**Against different environments**:
+#### With Coverage Report
 ```bash
-./scripts/run_e2e_tests.sh --env staging
-./scripts/run_e2e_tests.sh --url http://custom-api.com
+pytest -m unit --cov=src --cov-report=term-missing
 ```
 
-**Verbose output**:
+#### Verbose E2E Tests (for debugging)
 ```bash
-./scripts/run_e2e_tests.sh --verbose
+AWS_PROFILE=design-lee pytest -m e2e -v -s
 ```
 
-#### Test Coverage
+### Test Coverage
 
-The E2E test suite covers:
-- Complete pipeline execution with valid drawings
-- API response time validation (<2 seconds)
-- File generation and Excel content validation
-- Accuracy measurement against baseline data
-- Performance monitoring (<10 minutes processing)
-- Error handling scenarios (400, 404, 413, 422, 423)
-- Security tests (path traversal, SQL injection, input sanitization)
+#### Unit Tests Cover
+- PDF processing logic
+- Component extraction algorithms
+- Excel generation formatting
+- Error handling paths
+- Data validation
 
-#### Troubleshooting Test Failures
+#### E2E Tests Validate
+- **Full Pipeline**: PDF → Components → Excel with real APIs
+- **Error Handling**: Invalid files, corrupted PDFs
+- **Consistency**: <5% variance across multiple runs
 
-1. **API not responding**: Ensure the API is running on the expected port
-2. **Missing fixtures**: Verify test fixtures exist in `tests/fixtures/pdfs/`
-3. **Timeout errors**: Check if processing is taking longer than expected
-4. **Permission errors**: Ensure write access to `./output` directory
+### Test Data
 
-#### Updating Test Baselines
+- **Unit test fixtures**: Defined inline in test files
+- **E2E test PDFs**: Located in `tests/fixtures/pdfs/`
+  - `example_b2_drawing.pdf`: Baseline security drawing
+  - `103P3-E34-QCI-40098_Ver1.pdf`: Complex multi-page drawing
+  - `corrupted.pdf`: Error handling test
 
-When the expected output changes:
-1. Manually verify the new output is correct
-2. Update `tests/fixtures/expected/baseline_schedule.json`
-3. Document the change in test documentation
+### Troubleshooting
+
+1. **Unit test failures**: Clear environment cache with `get_env_cache().clear_cache()`
+2. **E2E connection issues**: Verify AWS credentials and Gemini API key
+3. **Missing fixtures**: Check `tests/fixtures/pdfs/` directory
+4. **Timeout errors**: E2E tests may take up to 2 minutes each
+
+### Migration Notes
+
+See `tests/MIGRATION_NOTES.md` for details on the simplified test infrastructure from Story 4.3.
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment.
+
+### Workflows
+
+#### CI - Test and Validate (`ci.yml`)
+- **Triggers**: Pull requests to main/dev, pushes to dev
+- **Jobs**:
+  - Lint and type check with ruff and mypy
+  - Run unit tests with coverage
+  - Run E2E tests against dev AWS resources
+  - Validate SAM templates
+- **Requirements**: GitHub secrets configured (see below)
+
+#### Deploy to Dev (`deploy-dev.yml`)
+- **Triggers**: Push to dev branch or manual dispatch
+- **Actions**:
+  - Deploy dev infrastructure (S3 + DynamoDB)
+  - Run smoke tests
+  - Cost: <$1/month for dev resources
+
+#### Deploy to Production (`deploy-prod.yml`)
+- **Triggers**: Push to main branch or manual dispatch
+- **Actions**:
+  - Run full test suite
+  - Build and deploy Lambda functions
+  - Deploy production infrastructure
+  - Create deployment tags
+
+### GitHub Secrets Configuration
+
+Required secrets (configure at https://github.com/7-central/security-design-assistant/settings/secrets):
+- `AWS_ACCESS_KEY_ID`: From 7c-IAM-Admin-User
+- `AWS_SECRET_ACCESS_KEY`: From 7c-IAM-Admin-User
+- `GEMINI_API_KEY`: Your Google GenAI API key
+
+### Branch Protection
+
+Recommended settings for main branch:
+- Require pull request reviews before merging
+- Require status checks to pass (CI workflow)
+- Require branches to be up to date before merging
+- Include administrators in restrictions
+
+## Environment Strategy
+
+### Three-Environment Approach
+
+1. **Local Development**
+   - File system storage (no AWS needed)
+   - Fast iteration and debugging
+   - Unit tests only
+
+2. **Development Environment (AWS)**
+   - Dedicated dev resources with `-dev-` naming
+   - 7-day S3 lifecycle for automatic cleanup
+   - E2E testing with real services
+   - Cost: <$1/month
+
+3. **Production Environment**
+   - Full AWS infrastructure
+   - Lambda functions with API Gateway
+   - Auto-scaling and monitoring
+   - Production data isolation

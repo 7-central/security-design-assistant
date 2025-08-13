@@ -16,25 +16,361 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Gemini API key for AI processing
+  
+  # Environment-specific Lambda configuration
+  LambdaMemorySize:
+    Type: Number
+    Default: 1024
+    Description: Lambda memory size in MB
+  
+  LambdaTimeout:
+    Type: Number
+    Default: 900
+    Description: Lambda timeout in seconds
+  
+  # Pre/Post traffic hook configuration
+  TrafficShiftingTimeoutInMinutes:
+    Type: Number
+    Default: 5
+    Description: Maximum time for traffic shifting
+  
+  TrafficShiftingPercentage:
+    Type: Number
+    Default: 10
+    Description: Percentage of traffic to shift every minute
 
 Globals:
   Function:
     Runtime: python3.11
-    MemorySize: 1024
-    Timeout: 900
+    Architectures:
+      - arm64  # Use ARM64 Graviton2 for 20% cost savings
+    MemorySize: !Ref LambdaMemorySize
+    Timeout: !Ref LambdaTimeout
     Tracing: Active  # Enable X-Ray tracing for all functions
+    Layers:
+      - !Ref DependenciesLayer
     Environment:
       Variables:
         STORAGE_MODE: aws
         S3_BUCKET: !Ref S3Bucket
         DYNAMODB_TABLE: !Ref JobsTable
         SQS_QUEUE_URL: !Ref ProcessingQueue
-        GEMINI_API_KEY: !Ref GeminiApiKey
+        GEMINI_API_KEY_PARAMETER: !Ref GeminiApiKeyParameter
         ENVIRONMENT: !Ref Environment
         SNS_ALERT_TOPIC_ARN: !Ref AlertTopic
-        _X_AMZN_TRACE_ID: !Sub "${AWS::StackName}"
+        STACK_NAME: !Sub "${AWS::StackName}"
 
 Resources:
+  # Lambda Layer for shared dependencies
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub 'security-assistant-dependencies-${Environment}'
+      Description: 'Shared dependencies for Security Assistant Lambda functions'
+      ContentUri: ../layer/
+      CompatibleRuntimes:
+        - python3.11
+      CompatibleArchitectures:
+        - arm64
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.11
+
+  # Pre-traffic hook function for deployment validation
+  PreTrafficHookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-pre-traffic-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.pre_traffic_hook.handler
+      Runtime: python3.11
+      MemorySize: 512
+      Timeout: 300
+      Layers: []  # Don't use the shared layer to avoid circular dependency
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - codedeploy:PutLifecycleEventHookExecutionStatus
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: 
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-api-${Environment}'
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-worker-${Environment}'
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-status-${Environment}'
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt JobsTable.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:ListBucket
+              Resource: 
+                - !Sub '${S3Bucket}/*'
+                - !GetAtt S3Bucket.Arn
+            - Effect: Allow
+              Action:
+                - sqs:GetQueueAttributes
+                - sqs:ReceiveMessage
+              Resource: !GetAtt ProcessingQueue.Arn
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+          S3_BUCKET: !Ref S3Bucket
+          DYNAMODB_TABLE: !Ref JobsTable
+          SQS_QUEUE_URL: !Ref ProcessingQueue
+          ENVIRONMENT: !Ref Environment
+
+  # Post-traffic hook function for deployment validation
+  PostTrafficHookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-post-traffic-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.post_traffic_hook.handler
+      Runtime: python3.11
+      MemorySize: 512
+      Timeout: 300
+      Layers: []  # Don't use the shared layer to avoid circular dependency
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - codedeploy:PutLifecycleEventHookExecutionStatus
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - cloudwatch:GetMetricStatistics
+                - cloudwatch:ListMetrics
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: 
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-api-${Environment}'
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-worker-${Environment}'
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-status-${Environment}'
+            - Effect: Allow
+              Action:
+                - sqs:GetQueueAttributes
+                - sqs:GetQueueUrl
+              Resource: 
+                - !GetAtt ProcessingQueue.Arn
+                - !GetAtt DeadLetterQueue.Arn
+      Environment:
+        Variables:
+          STORAGE_MODE: aws
+          ENVIRONMENT: !Ref Environment
+          API_FUNCTION_NAME: !Sub 'security-assistant-api-${Environment}'
+          WORKER_FUNCTION_NAME: !Sub 'security-assistant-worker-${Environment}'
+          STATUS_FUNCTION_NAME: !Sub 'security-assistant-status-${Environment}'
+          PROCESSING_QUEUE_URL: !Ref ProcessingQueue
+          DLQ_URL: !Ref DeadLetterQueue
+
+  # Parameter Store for sensitive configuration
+  GeminiApiKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/security-assistant/${Environment}/gemini-api-key'
+      Type: String
+      Value: !Ref GeminiApiKey
+      Description: 'Gemini API key for AI processing'
+      Tier: Standard
+
+  # IAM Roles with Least Privilege
+  ApiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecurityAssistant-ApiLambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: ApiLambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub '${S3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt JobsTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt ProcessingQueue.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Ref GeminiApiKeyParameter
+
+  WorkerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecurityAssistant-WorkerLambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: WorkerLambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub '${S3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource: 
+                  - !GetAtt JobsTable.Arn
+                  - !Sub '${JobsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ProcessingQueue.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Ref GeminiApiKeyParameter
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  StatusLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecurityAssistant-StatusLambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: StatusLambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: 
+                  - !GetAtt JobsTable.Arn
+                  - !Sub '${JobsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: 
+                  - !Sub '${S3Bucket}/*'
+                  - !GetAtt S3Bucket.Arn
+
+  DLQProcessorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecurityAssistant-DLQProcessorLambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: DLQProcessorLambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt JobsTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt DeadLetterQueue.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlertTopic
+
+  WarmerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecurityAssistant-WarmerLambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: WarmerLambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: 
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-api-${Environment}'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:security-assistant-status-${Environment}'
+
   # S3 Bucket for file storage
   S3Bucket:
     Type: AWS::S3::Bucket
@@ -59,7 +395,17 @@ Resources:
               DaysAfterInitiation: 7
           - Id: DeleteOldFiles
             Status: Enabled
-            ExpirationInDays: 365
+            ExpirationInDays: 30  # Delete files after 30 days as per AC
+      # Enable S3 Transfer Acceleration for faster uploads
+      AccelerateConfiguration:
+        AccelerationStatus: Enabled
+      # Configure Intelligent Tiering for cost optimization
+      IntelligentTieringConfigurations:
+        - Id: IntelligentTieringConfig
+          Status: Enabled
+          Prefix: ""  # Apply to all objects
+          OptionalFields:
+            - BucketKeyEnabled
 
   # DynamoDB table for job tracking
   JobsTable:
@@ -90,9 +436,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
         # GSI2: ClientProjectIndex for querying jobs by client
         - IndexName: ClientProjectIndex
           KeySchema:
@@ -102,9 +445,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
         # GSI3: DateRangeIndex for querying jobs by date range
         - IndexName: DateRangeIndex
           KeySchema:
@@ -114,13 +454,7 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
-      BillingMode: PROVISIONED
-      ProvisionedThroughput:
-        ReadCapacityUnits: 10
-        WriteCapacityUnits: 10
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing for cost optimization
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
@@ -132,9 +466,9 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'security-assistant-processing-${Environment}'
-      VisibilityTimeoutSeconds: 1800  # 30 minutes (max Lambda duration)
+      VisibilityTimeout: 1800  # 30 minutes (max Lambda duration)
       MessageRetentionPeriod: 1209600  # 14 days
-      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling enabled for cost optimization
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
         maxReceiveCount: 3
@@ -318,11 +652,49 @@ Resources:
       TopicName: !Sub 'security-assistant-alerts-${Environment}'
       DisplayName: 'Security Assistant Critical Alerts'
 
+  # Cost Anomaly Detection
+  CostAnomalyDetector:
+    Type: AWS::CE::AnomalyDetector
+    Properties:
+      DetectorName: !Sub 'SecurityAssistant-CostAnomaly-${Environment}'
+      MonitorType: DIMENSIONAL
+      MonitorSpecification:
+        DimensionKey: 'SERVICE'
+        DimensionValueRegex: '(AWS Lambda|Amazon API Gateway|Amazon S3|Amazon DynamoDB|Amazon SQS)'
+        MatchOptions:
+          - EQUALS
+      
+  CostAnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: !Sub 'SecurityAssistant-CostAlerts-${Environment}'
+      MonitorArnList:
+        - !Ref CostAnomalyDetector
+      Subscribers:
+        - Type: EMAIL
+          Address: 'devops@company.com'  # Replace with actual email
+        - Type: SNS
+          Address: !Ref AlertTopic
+      Frequency: DAILY
+      Threshold: 100  # Alert on anomalies >= $100
+
   # API Gateway for REST API
   Api:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref Environment
+      CacheClusterEnabled: true
+      CacheClusterSize: '0.5'  # Smallest cache size for cost optimization
+      MethodSettings:
+        - ResourcePath: '/status/*'
+          HttpMethod: GET
+          CachingEnabled: true
+          CacheTtlInSeconds: 300  # 5 minutes cache for status endpoints
+          CacheKeyParameters:
+            - method.request.path.job_id
+        - ResourcePath: '/process-drawing'
+          HttpMethod: POST
+          CachingEnabled: false  # Don't cache POST requests
       Cors:
         AllowMethods: "'GET,POST,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
@@ -337,16 +709,20 @@ Resources:
       Handler: lambda_functions.process_drawing_api.handler
       MemorySize: 1024
       Timeout: 30
+      Role: !GetAtt ApiLambdaRole.Arn
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrencyExecution: 2  # Keep 2 instances warm
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
+        Alarms:
+          - !Ref ApiLambdaErrorRateAlarm
+        Hooks:
+          PreTraffic: !Ref PreTrafficHookFunction
+          PostTraffic: !Ref PostTrafficHookFunction
       Environment:
         Variables:
           STORAGE_MODE: aws
-      Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Ref S3Bucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ProcessingQueue.QueueName
       Events:
         ProcessDrawing:
           Type: Api
@@ -365,16 +741,18 @@ Resources:
       MemorySize: 3008  # 3GB for PDF processing
       Timeout: 900     # 15 minutes
       ReservedConcurrentExecutions: 10  # Limit concurrent processing
+      Role: !GetAtt WorkerLambdaRole.Arn
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
+        Alarms:
+          - !Ref WorkerLambdaErrorRateAlarm
+        Hooks:
+          PreTraffic: !Ref PreTrafficHookFunction
+          PostTraffic: !Ref PostTrafficHookFunction
       Environment:
         Variables:
           STORAGE_MODE: aws
-      Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Ref S3Bucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - SQSPollerPolicy:
-            QueueName: !GetAtt ProcessingQueue.QueueName
       Events:
         SQSProcessor:
           Type: SQS
@@ -392,14 +770,18 @@ Resources:
       Handler: lambda_functions.get_job_status.handler
       MemorySize: 512
       Timeout: 30
+      Role: !GetAtt StatusLambdaRole.Arn
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
+        Alarms:
+          - !Ref StatusLambdaErrorRateAlarm
+        Hooks:
+          PreTraffic: !Ref PreTrafficHookFunction
+          PostTraffic: !Ref PostTrafficHookFunction
       Environment:
         Variables:
           STORAGE_MODE: aws
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref JobsTable
-        - S3ReadPolicy:
-            BucketName: !Ref S3Bucket
       Events:
         GetStatus:
           Type: Api
@@ -417,17 +799,11 @@ Resources:
       Handler: lambda_functions.dlq_processor.handler
       MemorySize: 512
       Timeout: 300  # 5 minutes
+      Role: !GetAtt DLQProcessorLambdaRole.Arn
       Environment:
         Variables:
           STORAGE_MODE: aws
           SNS_ALERT_TOPIC_ARN: !Ref AlertTopic
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - SNSPublishMessagePolicy:
-            TopicName: !GetAtt AlertTopic.TopicName
-        - SQSPollerPolicy:
-            QueueName: !GetAtt DeadLetterQueue.QueueName
       Events:
         DLQProcessor:
           Type: SQS
@@ -435,6 +811,27 @@ Resources:
             Queue: !GetAtt DeadLetterQueue.Arn
             BatchSize: 5
             MaximumBatchingWindowInSeconds: 60
+
+  # Lambda Warmer function to reduce cold starts
+  LambdaWarmerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'security-assistant-warmer-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda_functions.lambda_warmer.handler
+      MemorySize: 256  # Minimal memory for warmer
+      Timeout: 120    # 2 minutes
+      Role: !GetAtt WarmerLambdaRole.Arn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Events:
+        WarmingSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(5 minutes)'  # Warm functions every 5 minutes
+            Description: 'Keep critical Lambda functions warm'
+            Enabled: true
 
   # CloudWatch Log Groups with retention
   ProcessDrawingApiLogGroup:
@@ -460,6 +857,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/security-assistant-dlq-processor-${Environment}'
       RetentionInDays: 30
+
+  LambdaWarmerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/security-assistant-warmer-${Environment}'
+      RetentionInDays: 7  # Short retention for warmer logs
 
   # CloudWatch Dashboards
   MainDashboard:

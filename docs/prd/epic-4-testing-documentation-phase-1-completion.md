@@ -21,7 +21,7 @@
    - Component extraction formatting
    - Response structure building
 3. Mock external dependencies:
-   - Mock Vertex AI responses for agent tests
+   - Mock Gemini API responses for agent tests (using Google GenAI SDK)
    - Mock S3 operations for file tests
 4. Test execution:
    - All tests run with `pytest`
@@ -63,7 +63,50 @@
    - Verify consistent results
 5. Store test results for trend analysis
 
-## Story 4.3: Essential Documentation
+## Story 4.3: Pragmatic Test Suite & E2E Validation
+
+**As a** development team,  
+**I want** a pragmatic test suite with real E2E validation,  
+**so that** we can deploy v1 with confidence without over-engineering.
+
+**Acceptance Criteria:**
+1. Fix 3 trivial unit test failures:
+   - test_initialization_no_api_key in test_schedule_agent_v2.py
+   - test_ensure_directories_creates_structure in test_local_storage.py
+   - test_ensure_directories_permission_error in test_local_storage.py
+2. Maintain 52 working unit tests as foundation (100% pass rate target)
+3. Create 3-5 E2E tests with real API calls:
+   - Full pipeline test: PDF upload → Context → Extract → Excel generation
+   - Error handling test: Invalid PDF rejection with proper error messages
+   - Consistency test: Process same drawing 3 times, verify <5% variance
+4. Remove 567 complex integration/evaluation tests that cause mocking issues
+5. Update test strategy documentation to reflect pragmatic approach
+6. Ensure test execution meets performance targets:
+   - Unit tests: <10 seconds total
+   - E2E tests: <2 minutes per test
+
+**Note:** Story 4.3 identified that E2E tests require AWS infrastructure. See Story 4.3.1 below for resolution.
+
+## Story 4.3.1: E2E Test Infrastructure & Dev Environment Setup
+
+**As a** developer,  
+**I want** working E2E tests with dev AWS resources,  
+**so that** I can validate changes locally with real API calls before deployment.
+
+**Acceptance Criteria:**
+1. All E2E tests executable locally with `pytest -m e2e`
+2. Dev AWS resources deployed and documented
+3. CI/CD pipeline runs tests on every PR
+4. Clear separation of dev/prod environments
+5. Total dev infrastructure cost <$5/month
+
+**Implementation Notes:**
+- Deploy minimal dev AWS resources (S3 + DynamoDB only)
+- Update E2E tests to work with local FastAPI server
+- Configure GitHub Actions for automated testing
+- Create environment-specific .env templates
+
+## Story 4.4: Essential Documentation
 
 **As a** developer or operator,  
 **I want** core documentation to understand and run the system,  
@@ -82,9 +125,9 @@
    - Error codes and meanings
    - Postman collection or similar
 3. Deployment guide:
-   - SAM deployment steps
-   - Environment configuration
-   - Rollback procedures
+   - SAM deployment steps using security-assistant-sam-deployments bucket (AWS 445567098699, eu-west-2)
+   - Environment configuration for staging/production
+   - Rollback procedures for GitHub Actions workflows
 4. Architecture overview:
    - Simple diagram (even hand-drawn)
    - Component descriptions
@@ -98,7 +141,7 @@
    - How to add new test drawings
    - How to interpret AI Judge results
 
-## Story 4.4: Production Validation
+## Story 4.5: Production Validation
 
 **As a** business owner,  
 **I want** to validate the system on real projects,  
@@ -121,17 +164,17 @@
    - Types of errors encountered
    - Recommendations for Phase 2
 4. Operational readiness:
-   - Verify backups working
-   - Check monitoring alerts fire correctly
-   - Confirm error logs are helpful
-   - Test recovery from Lambda timeout
+   - Verify S3 bucket security-assistant-sam-deployments backups working
+   - Check CloudWatch monitoring alerts fire correctly in AWS 445567098699
+   - Confirm error logs are helpful in CloudWatch eu-west-2
+   - Test recovery from Lambda timeout with automatic rollback
 5. Knowledge capture:
    - Document lessons learned
    - List drawing characteristics that work well
    - Note patterns that challenge the system
 6. Go/no-go decision criteria for Phase 2
 
-## Story 4.5: Phase 1 Cleanup & Handoff
+## Story 4.6: Phase 1 Cleanup & Handoff
 
 **As a** product owner,  
 **I want** Phase 1 properly closed with clear next steps,  

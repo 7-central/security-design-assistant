@@ -1,0 +1,317 @@
+name: Deploy to Production
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+        - prod
+      skip_approval:
+        description: 'Skip manual approval (emergency deployment)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  SAM_VERSION: '1.100'
+  AWS_REGION: 'eu-west-2'
+  ENVIRONMENT: 'prod'
+
+jobs:
+  pre-production-validation:
+    name: Pre-production Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    outputs:
+      validation_passed: ${{ steps.validation.outputs.validation_passed }}
+      staging_health: ${{ steps.staging_check.outputs.health_status }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Set up SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        version: ${{ env.SAM_VERSION }}
+        
+    - name: Configure AWS credentials for validation
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_STAGING_ROLE_ARN }}
+        role-session-name: GitHubActions-PreProd-Validation
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Verify staging environment health
+      id: staging_check
+      run: |
+        echo "Checking staging environment health before production deployment..."
+        
+        # Check staging API Gateway
+        STAGING_API_ENDPOINT=$(aws cloudformation describe-stacks \
+          --stack-name security-assistant-staging \
+          --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+          --output text)
+          
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${STAGING_API_ENDPOINT}/health" || echo "000")
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "✅ Staging environment is healthy"
+          echo "health_status=healthy" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Staging environment is unhealthy (HTTP $HTTP_STATUS)"
+          echo "health_status=unhealthy" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Check recent error rates in staging
+        ERROR_RATE=$(aws cloudwatch get-metric-statistics \
+          --namespace AWS/Lambda \
+          --metric-name Errors \
+          --dimensions Name=FunctionName,Value=security-assistant-worker-staging \
+          --start-time $(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%S') \
+          --end-time $(date -u '+%Y-%m-%dT%H:%M:%S') \
+          --period 3600 \
+          --statistics Sum \
+          --query 'Datapoints[0].Sum' \
+          --output text 2>/dev/null || echo "0")
+          
+        if [ "${ERROR_RATE:-0}" -lt 5 ]; then
+          echo "✅ Staging error rate acceptable: ${ERROR_RATE} errors in last hour"
+        else
+          echo "❌ High error rate in staging: ${ERROR_RATE} errors in last hour"
+          exit 1
+        fi
+        
+    - name: Run comprehensive validation
+      id: validation
+      run: |
+        echo "Running comprehensive pre-production validation..."
+        
+        # Install dependencies
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov ruff mypy cfn-lint bandit
+        
+        # Code quality checks
+        python -m ruff check src/ tests/ || exit 1
+        python -m mypy src/ || exit 1
+        
+        # Security scan
+        bandit -r src/ -f json -o bandit-report.json
+        HIGH_ISSUES=$(cat bandit-report.json | python -c "import sys,json; data=json.load(sys.stdin); print(len([r for r in data.get('results',[]) if r.get('issue_severity') == 'HIGH']))")
+        if [ "$HIGH_ISSUES" -gt 0 ]; then
+          echo "❌ Security issues found: $HIGH_ISSUES HIGH severity issues"
+          exit 1
+        fi
+        
+        # Infrastructure validation
+        sam validate --template-file infrastructure/template.yaml || exit 1
+        cfn-lint infrastructure/template.yaml || exit 1
+        
+        # Test suite
+        python -m pytest tests/ -v --tb=short || exit 1
+        
+        echo "validation_passed=true" >> $GITHUB_OUTPUT
+        echo "✅ All validation checks passed"
+
+  manual-approval:
+    name: Manual Approval for Production
+    runs-on: ubuntu-latest
+    needs: pre-production-validation
+    if: needs.pre-production-validation.outputs.validation_passed == 'true' && github.event.inputs.skip_approval != 'true'
+    environment: 
+      name: production-approval
+      
+    steps:
+    - name: Request manual approval
+      run: |
+        echo "🔒 Manual approval required for production deployment"
+        echo "Staging Health: ${{ needs.pre-production-validation.outputs.staging_health }}"
+        echo "Validation Status: ${{ needs.pre-production-validation.outputs.validation_passed }}"
+
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    needs: [pre-production-validation, manual-approval]
+    if: |
+      always() && 
+      needs.pre-production-validation.outputs.validation_passed == 'true' &&
+      (needs.manual-approval.result == 'success' || github.event.inputs.skip_approval == 'true')
+    environment: 
+      name: production
+      url: https://${{ steps.deploy.outputs.api_endpoint }}
+    permissions:
+      contents: read
+      id-token: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Set up SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        version: ${{ env.SAM_VERSION }}
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+        role-session-name: GitHubActions-Production-Deploy
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Enable termination protection
+      run: |
+        # Enable termination protection for production stack
+        aws cloudformation update-termination-protection \
+          --stack-name security-assistant-prod \
+          --enable-termination-protection || true
+          
+    - name: Create deployment bucket if not exists
+      run: |
+        aws s3 ls s3://security-assistant-sam-deployments --region ${{ env.AWS_REGION }} > /dev/null 2>&1 || aws s3 mb s3://security-assistant-sam-deployments --region ${{ env.AWS_REGION }}
+        
+    - name: Build SAM application
+      run: |
+        sam build --template-file infrastructure/template.yaml --parallel
+        
+    - name: Create Lambda layer dependencies
+      run: |
+        mkdir -p layer/python
+        pip install -r requirements.txt -t layer/python/
+        # Production optimization - remove unnecessary files
+        find layer/python -name "*.pyc" -delete
+        find layer/python -name "__pycache__" -type d -exec rm -rf {} + || true
+        find layer/python -name "test*" -type d -exec rm -rf {} + || true
+        find layer/python -name "*.dist-info" -type d -exec rm -rf {} + || true
+        
+    - name: Deploy to production with gradual rollout
+      id: deploy
+      run: |
+        echo "🚀 Starting production deployment with gradual rollout..."
+        
+        sam deploy \
+          --config-env prod \
+          --parameter-overrides \
+            "Environment=${{ env.ENVIRONMENT }}" \
+            "GeminiApiKey=${{ secrets.GEMINI_API_KEY }}" \
+            "LambdaMemorySize=2048" \
+            "LambdaTimeout=900" \
+            "TrafficShiftingTimeoutInMinutes=10" \
+            "TrafficShiftingPercentage=5" \
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset \
+          --resolve-s3
+          
+        # Capture API endpoint
+        API_ENDPOINT=$(aws cloudformation describe-stacks \
+          --stack-name security-assistant-prod \
+          --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+          --output text)
+        echo "api_endpoint=${API_ENDPOINT}" >> $GITHUB_OUTPUT
+        
+        echo "🎉 Production deployment completed successfully!"
+        echo "API Endpoint: ${API_ENDPOINT}"
+        
+    - name: Monitor deployment health
+      run: |
+        echo "🔍 Monitoring deployment health for 10 minutes..."
+        API_ENDPOINT="${{ steps.deploy.outputs.api_endpoint }}"
+        
+        for i in {1..20}; do
+          echo "Health check ${i}/20..."
+          
+          # API Gateway health check
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_ENDPOINT}/health" || echo "000")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ API health check failed (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+          
+          # Check Lambda error rate
+          ERROR_RATE=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/Lambda \
+            --metric-name Errors \
+            --dimensions Name=FunctionName,Value=security-assistant-worker-prod \
+            --start-time $(date -u -d '5 minutes ago' '+%Y-%m-%dT%H:%M:%S') \
+            --end-time $(date -u '+%Y-%m-%dT%H:%M:%S') \
+            --period 300 \
+            --statistics Sum \
+            --query 'Datapoints[0].Sum' \
+            --output text 2>/dev/null || echo "0")
+            
+          if [ "${ERROR_RATE:-0}" -gt 2 ]; then
+            echo "❌ High error rate detected: ${ERROR_RATE} errors in last 5 minutes"
+            exit 1
+          fi
+          
+          # Check DLQ depth
+          DLQ_DEPTH=$(aws sqs get-queue-attributes \
+            --queue-url $(aws sqs get-queue-url --queue-name security-assistant-dlq-prod --query 'QueueUrl' --output text) \
+            --attribute-names ApproximateNumberOfVisibleMessages \
+            --query 'Attributes.ApproximateNumberOfVisibleMessages' \
+            --output text 2>/dev/null || echo "0")
+            
+          if [ "${DLQ_DEPTH:-0}" -gt 0 ]; then
+            echo "❌ Messages in DLQ: ${DLQ_DEPTH}"
+            exit 1
+          fi
+          
+          echo "✅ Health check ${i}/20 passed"
+          sleep 30
+        done
+        
+        echo "🎉 All health checks passed! Deployment is stable."
+        
+    - name: Run production smoke tests
+      run: |
+        echo "🧪 Running production smoke tests..."
+        export API_BASE_URL="${{ steps.deploy.outputs.api_endpoint }}"
+        export ENVIRONMENT="prod"
+        export STORAGE_MODE="aws"
+        
+        # Run minimal smoke tests
+        python -m pytest tests/integration/test_e2e.py::test_health_check -v
+        echo "✅ Production smoke tests passed"
+        
+    - name: Send success notification
+      if: success()
+      run: |
+        echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL 🎉"
+        echo "Environment: ${{ env.ENVIRONMENT }}"
+        echo "API Endpoint: ${{ steps.deploy.outputs.api_endpoint }}"
+        echo "Deployment completed at: $(date)"
+        echo "Gradual rollout completed with monitoring"
+        
+    - name: Emergency rollback on failure
+      if: failure()
+      run: |
+        echo "🚨 EMERGENCY ROLLBACK INITIATED 🚨"
+        
+        # Attempt to rollback the stack
+        aws cloudformation cancel-update-stack --stack-name security-assistant-prod || true
+        
+        # Wait for rollback to complete
+        aws cloudformation wait stack-update-complete --stack-name security-assistant-prod || \
+        aws cloudformation wait stack-rollback-complete --stack-name security-assistant-prod
+        
+        echo "🔄 Rollback attempted. Please verify system state manually."
+        echo "📞 ALERT: Production deployment failed and rollback was attempted."

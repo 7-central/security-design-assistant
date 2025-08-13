@@ -1,0 +1,32 @@
+{
+  "Parameters": {
+    "Environment": "staging",
+    "LambdaMemorySize": 1024,
+    "LambdaTimeout": 600,
+    "TrafficShiftingTimeoutInMinutes": 5,
+    "TrafficShiftingPercentage": 10
+  },
+  "Tags": {
+    "Environment": "staging",
+    "Project": "SecurityAssistant",
+    "Owner": "DevTeam",
+    "CostCenter": "Engineering",
+    "Purpose": "Pre-production testing and validation"
+  },
+  "Configuration": {
+    "MonitoringLevel": "enhanced",
+    "LogRetentionDays": 30,
+    "AutoScaling": {
+      "MinCapacity": 2,
+      "MaxCapacity": 10,
+      "TargetUtilization": 60
+    },
+    "AlarmThresholds": {
+      "ErrorRate": 0.10,
+      "Duration": 15000,
+      "ThrottleRate": 0.05
+    },
+    "TestDataVolume": "production-like",
+    "PerformanceTesting": true
+  }
+}

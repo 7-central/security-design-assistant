@@ -39,37 +39,24 @@ class ExcelGenerationAgent(BaseAgentV2):
         try:
             components = input_data.get("components", [])
             if not components:
-                return {
-                    "status": "error",
-                    "message": "No components provided for Excel generation"
-                }
+                return {"status": "error", "message": "No components provided for Excel generation"}
 
-            self.log_structured("info", "Starting Excel generation",
-                               component_count=len(components))
+            self.log_structured("info", "Starting Excel generation", component_count=len(components))
 
             excel_base64 = await self.generate_excel(components)
 
             if not excel_base64:
-                return {
-                    "status": "error",
-                    "message": "Failed to generate Excel file"
-                }
+                return {"status": "error", "message": "Failed to generate Excel file"}
 
             file_path = await self._save_excel(excel_base64)
 
             summary = self._calculate_summary(components)
 
-            await self.save_checkpoint("excel_generation", {
-                "file_path": file_path,
-                "summary": summary,
-                "component_count": len(components)
-            })
+            await self.save_checkpoint(
+                "excel_generation", {"file_path": file_path, "summary": summary, "component_count": len(components)}
+            )
 
-            return {
-                "status": "completed",
-                "file_path": file_path,
-                "summary": summary
-            }
+            return {"status": "completed", "file_path": file_path, "summary": summary}
 
         except Exception as e:
             logger.error(f"Excel generation failed: {e}")
@@ -93,8 +80,8 @@ class ExcelGenerationAgent(BaseAgentV2):
                 config=types.GenerateContentConfig(
                     temperature=0.1,
                     max_output_tokens=65536,
-                    tools=[types.Tool(code_execution=types.ToolCodeExecution())]
-                )
+                    tools=[types.Tool(code_execution=types.ToolCodeExecution())],
+                ),
             )
 
             self._track_cost(prompt, response)
@@ -172,12 +159,12 @@ Write and execute the Python code to generate this Excel file."""
         """
         try:
             for part in response.candidates[0].content.parts:
-                if hasattr(part, 'code_execution_result') and part.code_execution_result:
+                if hasattr(part, "code_execution_result") and part.code_execution_result:
                     output = part.code_execution_result.output
 
                     if "EXCEL_BASE64:" in output:
                         base64_data = output.split("EXCEL_BASE64:")[1].strip()
-                        return base64_data
+                        return str(base64_data)
 
             logger.warning("No Excel base64 data found in Gemini response")
             return None
@@ -223,7 +210,7 @@ Write and execute the Python code to generate this Excel file."""
             "doors_found": door_count,
             "readers_found": reader_count,
             "exit_buttons_found": exit_button_count,
-            "total_components": len(components)
+            "total_components": len(components),
         }
 
     def _track_cost(self, prompt: str, response: types.GenerateContentResponse) -> None:
@@ -234,22 +221,22 @@ Write and execute the Python code to generate this Excel file."""
             response: API response
         """
         input_tokens = self.estimate_tokens(prompt)
-        
+
         # Handle code execution responses differently
         output_text = ""
         try:
             # For code execution, estimate tokens from the executed code and output
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'executable_code') and part.executable_code:
+                    if hasattr(part, "executable_code") and part.executable_code:
                         output_text += str(part.executable_code.code)
-                    elif hasattr(part, 'code_execution_result') and part.code_execution_result:
+                    elif hasattr(part, "code_execution_result") and part.code_execution_result:
                         output_text += str(part.code_execution_result.output)
-                    elif hasattr(part, 'text'):
+                    elif hasattr(part, "text"):
                         output_text += str(part.text)
-            
+
             # Only try to access response.text if there are no code execution parts
-            if not output_text and hasattr(response, 'text'):
+            if not output_text and hasattr(response, "text"):
                 try:
                     output_text = str(response.text)
                 except Exception:
@@ -257,17 +244,20 @@ Write and execute the Python code to generate this Excel file."""
         except Exception as e:
             logger.debug(f"Could not extract text for cost tracking: {e}")
             output_text = ""
-        
+
         output_tokens = self.estimate_tokens(output_text)
 
         input_cost = (input_tokens / 1_000_000) * self.cost_per_million_input
         output_cost = (output_tokens / 1_000_000) * self.cost_per_million_output
         total_cost = input_cost + output_cost
 
-        self.log_structured("info", "Excel generation cost tracked",
-                           input_tokens=input_tokens,
-                           output_tokens=output_tokens,
-                           total_cost_usd=round(total_cost, 4))
+        self.log_structured(
+            "info",
+            "Excel generation cost tracked",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_cost_usd=round(total_cost, 4),
+        )
 
     def _generate_partial_schedule(self, components: list[dict[str, Any]]) -> str | None:
         """Generate a partial schedule when full generation fails.
@@ -283,7 +273,7 @@ Write and execute the Python code to generate this Excel file."""
             if not isinstance(components, list):
                 logger.error(f"Expected list of components, got {type(components).__name__}")
                 return None
-                
+
             mappable_components = []
             unmappable_components = []
 
@@ -308,8 +298,8 @@ Write and execute the Python code to generate this Excel file."""
                 config=types.GenerateContentConfig(
                     temperature=0.1,
                     max_output_tokens=32768,
-                    tools=[types.Tool(code_execution=types.ToolCodeExecution())]
-                )
+                    tools=[types.Tool(code_execution=types.ToolCodeExecution())],
+                ),
             )
 
             return self._extract_excel_from_response(response)

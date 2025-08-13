@@ -19,7 +19,7 @@ class CodeGenAgentV2(BaseAgentV2):
     def _build_excel_generation_prompt(self, components: list[dict], context: dict) -> str:
         """Build prompt for Excel generation with code execution."""
         # Extract unique component types for dynamic columns
-        component_types = list({comp.get('type', 'Unknown') for comp in components})
+        component_types = list({comp.get("type", "Unknown") for comp in components})
 
         return f"""Generate an Excel file for the security access control schedule using openpyxl.
 
@@ -78,11 +78,7 @@ Execute the code to create the actual file."""
 
             if not components:
                 self.log_structured("warning", "No components found to generate schedule")
-                return {
-                    "excel_file": None,
-                    "error": "No components found",
-                    "next_stage": "judge"
-                }
+                return {"excel_file": None, "error": "No components found", "next_stage": "judge"}
 
             # Get context if available
             context = input_data.get("context", {})
@@ -110,16 +106,9 @@ Execute the code to create the actual file."""
                 self.log_structured("info", f"Excel schedule generated: {final_path}")
 
                 # Save checkpoint
-                await self.save_checkpoint("codegen", {
-                    "excel_file": final_path,
-                    "components_count": len(components)
-                })
+                await self.save_checkpoint("codegen", {"excel_file": final_path, "components_count": len(components)})
 
-                return {
-                    "excel_file": final_path,
-                    "components_count": len(components),
-                    "next_stage": "judge"
-                }
+                return {"excel_file": final_path, "components_count": len(components), "next_stage": "judge"}
             else:
                 # Try to extract code from response and save for debugging
                 self.log_structured("error", "Excel file not generated from code execution")
@@ -127,13 +116,9 @@ Execute the code to create the actual file."""
                     "excel_file": None,
                     "error": "Code execution did not produce Excel file",
                     "response": response[:500],  # First 500 chars for debugging
-                    "next_stage": "judge"
+                    "next_stage": "judge",
                 }
 
         except Exception as e:
             self.log_structured("error", f"Excel generation failed: {e!s}")
-            return {
-                "excel_file": None,
-                "error": str(e),
-                "next_stage": "judge"
-            }
+            return {"excel_file": None, "error": str(e), "next_stage": "judge"}

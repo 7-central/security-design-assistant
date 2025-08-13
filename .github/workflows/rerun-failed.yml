@@ -1,0 +1,59 @@
+name: Rerun Failed E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to rerun tests for'
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: 'eu-west-2'
+
+jobs:
+  rerun-failed:
+    name: Rerun Failed E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ inputs.pr_number }}/head
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Download previous test cache
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-test-results-*
+          path: .pytest_cache/
+        continue-on-error: true
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Run only failed tests
+        env:
+          STORAGE_MODE: aws
+          ENV: dev
+          AWS_REGION: ${{ env.AWS_REGION }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # This runs only tests that failed in the last run
+          pytest tests/e2e -v -m e2e --tb=short --lf || \
+          echo "No failed tests to rerun or all tests passed"

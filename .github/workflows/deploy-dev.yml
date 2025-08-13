@@ -1,0 +1,97 @@
+name: Deploy to Dev Environment
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ dev ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: 'eu-west-2'
+  STACK_NAME: 'security-assistant-dev'
+
+jobs:
+  deploy:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    environment: development
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install aws-sam-cli
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Validate SAM template
+        run: |
+          sam validate --template infrastructure/dev-template.yaml --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy dev infrastructure
+        run: |
+          sam deploy \
+            --template-file infrastructure/dev-template.yaml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --s3-bucket security-assistant-sam-deployments \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+      
+      - name: Get stack outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs' \
+            --output table
+      
+      - name: Run smoke tests
+        env:
+          STORAGE_MODE: aws
+          ENV: dev
+          AWS_REGION: ${{ env.AWS_REGION }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Install test dependencies
+          pip install -r requirements.txt
+          pip install pytest httpx
+          
+          # Run a basic health check
+          python -c "
+import boto3
+import os
+
+# Verify S3 bucket exists
+s3 = boto3.client('s3', region_name='${{ env.AWS_REGION }}')
+try:
+    s3.head_bucket(Bucket='security-assistant-dev-445567098699')
+    print('✅ S3 bucket is accessible')
+except Exception as e:
+    print(f'❌ S3 bucket error: {e}')
+    exit(1)
+
+# Verify DynamoDB table exists
+dynamodb = boto3.client('dynamodb', region_name='${{ env.AWS_REGION }}')
+try:
+    response = dynamodb.describe_table(TableName='security-assistant-dev-jobs')
+    print(f'✅ DynamoDB table is active: {response['Table']['TableStatus']}')
+except Exception as e:
+    print(f'❌ DynamoDB table error: {e}')
+    exit(1)
+          "

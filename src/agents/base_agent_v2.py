@@ -1,13 +1,11 @@
-"""Base Agent V2 with Google GenAI SDK."""
+"""Base Agent V2 with Google GenAI SDK and lazy loading optimization."""
 import json
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
-from google import genai
-from google.genai import types
-
+# Lazy loading imports - only import when needed
 from src.config.settings import settings
 from src.storage.interface import StorageInterface
 
@@ -27,10 +25,17 @@ class BaseAgentV2(ABC):
         self.storage = storage
         self.job = job
         self.agent_name = self.__class__.__name__
-        self.client = self._initialize_client()
+        self._client = None  # Lazy load client only when needed
 
-    def _initialize_client(self) -> genai.Client:
-        """Initialize the Google GenAI client.
+    @property
+    def client(self) -> Any:
+        """Lazy-loaded GenAI client."""
+        if self._client is None:
+            self._client = self._initialize_client()
+        return self._client
+
+    def _initialize_client(self) -> Any:
+        """Initialize the Google GenAI client with lazy loading.
 
         Returns:
             Configured GenAI client
@@ -38,13 +43,16 @@ class BaseAgentV2(ABC):
         Raises:
             ValueError: If GEMINI_API_KEY is not set
         """
-        if not settings.GEMINI_API_KEY:
+        # Import only when needed to reduce cold start time
+        from google import genai
+
+        if not settings.gemini_api_key:
             raise ValueError(
                 "GEMINI_API_KEY environment variable is required. "
                 "Get your API key from https://aistudio.google.com/app/apikey"
             )
 
-        return genai.Client(api_key=settings.GEMINI_API_KEY)
+        return genai.Client(api_key=settings.gemini_api_key)
 
     @abstractmethod
     async def process(self, input_data: dict[str, Any]) -> dict[str, Any]:
@@ -58,11 +66,7 @@ class BaseAgentV2(ABC):
         """
         pass
 
-    async def save_checkpoint(
-        self,
-        stage: str,
-        data: dict[str, Any]
-    ) -> str:
+    async def save_checkpoint(self, stage: str, data: dict[str, Any]) -> str:
         """Save a checkpoint for the current processing stage.
 
         Args:
@@ -72,25 +76,24 @@ class BaseAgentV2(ABC):
         Returns:
             Checkpoint file key
         """
-        checkpoint_key = f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        checkpoint_key = (
+            f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        )
 
         checkpoint_data = {
             "job_id": self.job.job_id,
             "stage": stage,
             "agent": self.agent_name,
             "timestamp": datetime.utcnow().isoformat(),
-            "data": data
+            "data": data,
         }
 
-        content = json.dumps(checkpoint_data, indent=2).encode('utf-8')
+        content = json.dumps(checkpoint_data, indent=2).encode("utf-8")
         await self.storage.save_file(checkpoint_key, content)
         logger.info(f"Saved checkpoint for job {self.job.job_id} at stage {stage}")
         return checkpoint_key
 
-    async def load_checkpoint(
-        self,
-        stage: str
-    ) -> Optional[dict[str, Any]]:
+    async def load_checkpoint(self, stage: str) -> dict[str, Any] | None:
         """Load a checkpoint for a specific stage.
 
         Args:
@@ -99,20 +102,23 @@ class BaseAgentV2(ABC):
         Returns:
             Checkpoint data if exists, None otherwise
         """
-        checkpoint_key = f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        checkpoint_key = (
+            f"{self.job.client_name}/{self.job.project_name}/job_{self.job.job_id}/checkpoint_{stage}_v1.json"
+        )
 
         try:
             if await self.storage.file_exists(checkpoint_key):
                 content = await self.storage.get_file(checkpoint_key)
-                checkpoint_data = json.loads(content.decode('utf-8'))
+                checkpoint_data = json.loads(content.decode("utf-8"))
                 logger.info(f"Loaded checkpoint for job {self.job.job_id} at stage {stage}")
-                return checkpoint_data.get("data")
+                result = checkpoint_data.get("data")
+                return result if result is not None else None
         except Exception as e:
             logger.error(f"Failed to load checkpoint for job {self.job.job_id}: {e}")
 
         return None
 
-    def upload_file(self, file_path: str) -> types.File:
+    def upload_file(self, file_path: str) -> Any:
         """Upload a file to Google GenAI for processing.
 
         Args:
@@ -123,17 +129,13 @@ class BaseAgentV2(ABC):
         """
         logger.info(f"Uploading file: {file_path}")
         # Use pathlib.Path for better compatibility
-        from pathlib import Path
         uploaded_file = self.client.files.upload(path=str(file_path))
         logger.info(f"File uploaded successfully: {uploaded_file.name}")
         return uploaded_file
 
     def generate_content(
-        self,
-        model_name: str,
-        contents: list[Any],
-        generation_config: Optional[dict[str, Any]] = None
-    ) -> types.GenerateContentResponse:
+        self, model_name: str, contents: list[Any], generation_config: dict[str, Any] | None = None
+    ) -> Any:
         """Generate content using the specified model.
 
         Args:
@@ -150,43 +152,34 @@ class BaseAgentV2(ABC):
             "max_output_tokens": 8192,
         }
 
+        # Import types locally to avoid scope issues
+        from google.genai import types
+
         response = self.client.models.generate_content(
-            model=model_name,
-            contents=contents,
-            config=types.GenerateContentConfig(**config)
+            model=model_name, contents=contents, config=types.GenerateContentConfig(**config)
         )
 
         return response
 
-    async def _generate_with_retry(
-        self, 
-        prompt: str | list[Any],
-        model_name: Optional[str] = None
-    ) -> types.GenerateContentResponse:
+    async def _generate_with_retry(self, prompt: str | list[Any], model_name: str | None = None) -> Any:
         """Generate content with retry logic (compatibility method).
-        
+
         Args:
             prompt: Text prompt or list of content parts
             model_name: Optional model name override
-            
+
         Returns:
             Generated content response
         """
         # Use default model if not specified
         if model_name is None:
-            model_name = settings.GEMINI_MODEL
-            
+            model_name = settings.gemini_model
+
         # If prompt is a string, wrap it in proper format
-        if isinstance(prompt, str):
-            contents = [prompt]
-        else:
-            contents = prompt
-            
+        contents = [prompt] if isinstance(prompt, str) else prompt
+
         # The GenAI SDK has built-in retry logic
-        return self.generate_content(
-            model_name=model_name,
-            contents=contents
-        )
+        return self.generate_content(model_name=model_name, contents=contents)
 
     def handle_error(self, error: Exception) -> dict[str, Any]:
         """Handle common errors with appropriate responses.
@@ -197,10 +190,7 @@ class BaseAgentV2(ABC):
         Returns:
             Error information dict
         """
-        error_info = {
-            "error": str(error),
-            "type": type(error).__name__
-        }
+        error_info: dict[str, Any] = {"error": str(error), "type": type(error).__name__}
 
         # Map common errors to user-friendly messages
         if "API_KEY_INVALID" in str(error):
@@ -256,7 +246,7 @@ class BaseAgentV2(ABC):
             "agent": self.agent_name,
             "client": self.job.client_name,
             "project": self.job.project_name,
-            **kwargs
+            **kwargs,
         }
 
         getattr(logger, level)(message, extra=extra_data)

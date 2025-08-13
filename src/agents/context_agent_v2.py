@@ -51,7 +51,7 @@ Return a JSON object with this structure:
             # Check if PDF is genuine or scanned
             pdf_info = self.pdf_processor.get_pdf_info(file_path)
 
-            if pdf_info['type'] == 'genuine':
+            if pdf_info["type"] == "genuine":
                 # Extract text from genuine PDF
                 pages = self.pdf_processor.extract_text_from_pdf(file_path)
                 full_text = "\n\n".join([f"Page {p['page']}: {p['text']}" for p in pages])
@@ -106,13 +106,7 @@ Return a JSON object with this structure:
         except json.JSONDecodeError as e:
             self.log_structured("warning", f"Failed to parse JSON response: {e}")
             # Return a basic structure
-            return {
-                "sections": [{
-                    "title": "Raw Content",
-                    "content": response,
-                    "type": "general"
-                }]
-            }
+            return {"sections": [{"title": "Raw Content", "content": response, "type": "general"}]}
 
     async def process(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Process context document and extract relevant information.
@@ -129,15 +123,12 @@ Return a JSON object with this structure:
             # Check if context is provided
             if "context_file" not in input_data and "context_text" not in input_data:
                 self.log_structured("info", "No context provided, skipping context processing")
-                return {
-                    "context": {"sections": []},
-                    "next_stage": "schedule"
-                }
+                return {"context": {"sections": []}, "next_stage": "schedule"}
 
             # Process based on input type
             if "context_file" in input_data:
                 file_path = input_data["context_file"]
-                if Path(file_path).suffix.lower() == '.pdf':
+                if Path(file_path).suffix.lower() == ".pdf":
                     context_data = await self._process_pdf_context(file_path)
                 else:
                     # Read text file
@@ -155,15 +146,9 @@ Return a JSON object with this structure:
             # Save checkpoint
             await self.save_checkpoint("context", {"context_data": context_data})
 
-            return {
-                "context": context_data,
-                "next_stage": "schedule"
-            }
+            return {"context": context_data, "next_stage": "schedule"}
 
         except Exception as e:
             self.log_structured("error", f"Context processing failed: {e!s}")
             # Continue without context on failure
-            return {
-                "context": {"sections": [], "error": str(e)},
-                "next_stage": "schedule"
-            }
+            return {"context": {"sections": [], "error": str(e)}, "next_stage": "schedule"}

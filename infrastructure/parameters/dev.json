@@ -1,0 +1,30 @@
+{
+  "Parameters": {
+    "Environment": "dev",
+    "LambdaMemorySize": 512,
+    "LambdaTimeout": 300,
+    "TrafficShiftingTimeoutInMinutes": 2,
+    "TrafficShiftingPercentage": 50
+  },
+  "Tags": {
+    "Environment": "dev",
+    "Project": "SecurityAssistant",
+    "Owner": "DevTeam",
+    "CostCenter": "Engineering",
+    "Purpose": "Development and testing"
+  },
+  "Configuration": {
+    "MonitoringLevel": "basic",
+    "LogRetentionDays": 7,
+    "AutoScaling": {
+      "MinCapacity": 1,
+      "MaxCapacity": 5,
+      "TargetUtilization": 70
+    },
+    "AlarmThresholds": {
+      "ErrorRate": 0.20,
+      "Duration": 30000,
+      "ThrottleRate": 0.10
+    }
+  }
+}
