@@ -17,6 +17,7 @@ from src.storage.interface import StorageInterface
 
 class ScheduleAgentError(Exception):
     """Base exception for Schedule Agent."""
+
     pass
 
 
@@ -40,6 +41,7 @@ class ScheduleAgentV2(BaseAgentV2):
         # If a specific version is requested, use the version manager
         if self.prompt_version is not None:
             from src.config.prompt_version_manager import PromptVersionManager
+
             manager = PromptVersionManager()
             return manager.load_prompt(self.prompt_version)
 
@@ -49,11 +51,7 @@ class ScheduleAgentV2(BaseAgentV2):
             with open(prompt_path) as f:
                 return f.read()
         except FileNotFoundError:
-            self.log_structured(
-                "error",
-                "Prompt template not found",
-                path=str(prompt_path)
-            )
+            self.log_structured("error", "Prompt template not found", path=str(prompt_path))
             raise
 
     def filter_relevant_context(self, context_data: dict[str, Any], max_tokens: int = 4000) -> str:
@@ -70,15 +68,28 @@ class ScheduleAgentV2(BaseAgentV2):
             return ""
 
         # Keywords for relevance filtering
-        keywords = ["door", "lock", "reader", "exit", "hardware", "type", "access", "control",
-                   "type 11", "type 12", "maglock", "electric strike", "rex", "button"]
+        keywords = [
+            "door",
+            "lock",
+            "reader",
+            "exit",
+            "hardware",
+            "type",
+            "access",
+            "control",
+            "type 11",
+            "type 12",
+            "maglock",
+            "electric strike",
+            "rex",
+            "button",
+        ]
 
         relevant_sections = []
         current_tokens = 0
 
         # Prioritize specification sections over general sections
-        sections = sorted(context_data["sections"],
-                         key=lambda x: 0 if x.get("type") == "specification" else 1)
+        sections = sorted(context_data["sections"], key=lambda x: 0 if x.get("type") == "specification" else 1)
 
         for section in sections:
             content = section.get("content", "").lower()
@@ -101,14 +112,14 @@ class ScheduleAgentV2(BaseAgentV2):
                         "Context section included",
                         title=section.get("title"),
                         estimated_tokens=estimated_tokens,
-                        total_tokens=current_tokens
+                        total_tokens=current_tokens,
                     )
                 else:
                     self.log_structured(
                         "info",
                         "Context section skipped - token limit",
                         title=section.get("title"),
-                        estimated_tokens=estimated_tokens
+                        estimated_tokens=estimated_tokens,
                     )
                     break
 
@@ -119,7 +130,7 @@ class ScheduleAgentV2(BaseAgentV2):
         context_parts = ["Project specifications:"]
         for section in relevant_sections:
             context_parts.append(f"\n{section.get('title', 'Section')}:")
-            context_parts.append(section.get('content', ''))
+            context_parts.append(section.get("content", ""))
 
         context_string = "\n".join(context_parts)
 
@@ -128,7 +139,7 @@ class ScheduleAgentV2(BaseAgentV2):
             "Context filtering complete",
             sections_included=len(relevant_sections),
             total_sections=len(context_data.get("sections", [])),
-            estimated_tokens_used=current_tokens
+            estimated_tokens_used=current_tokens,
         )
 
         return context_string
@@ -162,6 +173,7 @@ class ScheduleAgentV2(BaseAgentV2):
             )
             if context_checkpoint:
                 import json
+
                 context_data = json.loads(context_checkpoint)
                 self.log_structured("info", "Context checkpoint loaded successfully")
         except Exception as e:
@@ -181,38 +193,36 @@ class ScheduleAgentV2(BaseAgentV2):
                 tokens_used=extraction_result.processing_metadata.get("tokens_used", 0),
                 estimated_cost=extraction_result.processing_metadata.get("estimated_cost", 0.0),
                 processing_time_ms=processing_time_ms,
-                total_components=extraction_result.total_components
+                total_components=extraction_result.total_components,
             )
 
             # Save checkpoint
-            checkpoint_data = {
-                "components": extraction_result.model_dump(),
-                "processing_time_ms": processing_time_ms
-            }
+            checkpoint_data = {"components": extraction_result.model_dump(), "processing_time_ms": processing_time_ms}
             await self.save_checkpoint("components_extracted", checkpoint_data)
 
             # Update job processing results
-            self.job.update_processing_results({
-                "schedule_agent": {
-                    "total_components": extraction_result.total_components,
-                    "processing_time_ms": processing_time_ms,
-                    "tokens_used": extraction_result.processing_metadata.get("tokens_used", 0),
-                    "estimated_cost": extraction_result.processing_metadata.get("estimated_cost", 0.0),
-                    "context_used": context_data is not None
+            self.job.update_processing_results(
+                {
+                    "schedule_agent": {
+                        "total_components": extraction_result.total_components,
+                        "processing_time_ms": processing_time_ms,
+                        "tokens_used": extraction_result.processing_metadata.get("tokens_used", 0),
+                        "estimated_cost": extraction_result.processing_metadata.get("estimated_cost", 0.0),
+                        "context_used": context_data is not None,
+                    }
                 }
-            })
+            )
 
-            return {
-                "components": extraction_result.model_dump(),
-                "next_stage": "codegen"
-            }
+            return {"components": extraction_result.model_dump(), "next_stage": "codegen"}
 
         except Exception as e:
             error_info = self.handle_error(e)
             self.log_structured("error", f"Schedule agent processing failed: {error_info.get('message', str(e))}")
             raise ScheduleAgentError(f"Processing failed: {error_info['message']}") from e
 
-    async def _extract_components(self, pages: list[dict[str, Any]], context_data: dict[str, Any] | None = None) -> ComponentExtractionResult:
+    async def _extract_components(
+        self, pages: list[dict[str, Any]], context_data: dict[str, Any] | None = None
+    ) -> ComponentExtractionResult:
         """Extract components from PDF pages using native PDF support.
 
         Args:
@@ -222,7 +232,9 @@ class ScheduleAgentV2(BaseAgentV2):
         Returns:
             ComponentExtractionResult with extracted components
         """
-        self.log_structured("info", "Starting component extraction", total_pages=len(pages), has_context=context_data is not None)
+        self.log_structured(
+            "info", "Starting component extraction", total_pages=len(pages), has_context=context_data is not None
+        )
 
         # Check if we have a PDF file path
         pdf_path = pages[0].get("pdf_path") if pages else None
@@ -234,7 +246,9 @@ class ScheduleAgentV2(BaseAgentV2):
             # Fall back to page-by-page processing
             return await self._extract_components_by_pages(pages, context_data)
 
-    async def _extract_components_native_pdf(self, pdf_path: str, context_data: dict[str, Any] | None = None) -> ComponentExtractionResult:
+    async def _extract_components_native_pdf(
+        self, pdf_path: str, context_data: dict[str, Any] | None = None
+    ) -> ComponentExtractionResult:
         """Extract components using the working method - FileData with file_uri.
 
         Args:
@@ -257,30 +271,28 @@ class ScheduleAgentV2(BaseAgentV2):
 
         # Build prompt with context injection
         prompt = self.prompt_template.format(
-            context_section=context_section if context_section else "",
-            page_number="all",
-            total_pages="entire document"
+            context_section=context_section if context_section else "", page_number="all", total_pages="entire document"
         )
 
         # Generate content using the WORKING method
         from google.genai import types
+
         file_part = types.Part(
             file_data=types.FileData(
                 file_uri=uploaded_file.uri,  # Use file_uri not fileUri!
-                mime_type="application/pdf"
+                mime_type="application/pdf",
             )
         )
 
         # Use gemini-2.5-pro model for extraction
-        response = self.generate_content(
-            model_name="models/gemini-2.5-pro",
-            contents=[prompt, file_part]
-        )
+        response = self.generate_content(model_name="models/gemini-2.5-pro", contents=[prompt, file_part])
 
         # Parse response
         return self._parse_extraction_response(response)
 
-    async def _extract_components_by_pages(self, pages: list[dict[str, Any]], context_data: dict[str, Any] | None = None) -> ComponentExtractionResult:
+    async def _extract_components_by_pages(
+        self, pages: list[dict[str, Any]], context_data: dict[str, Any] | None = None
+    ) -> ComponentExtractionResult:
         """Extract components page by page (fallback method).
 
         Args:
@@ -306,13 +318,10 @@ class ScheduleAgentV2(BaseAgentV2):
             contents = self._build_page_content(page_data, page_num, len(pages), context_section)
 
             # Generate content
-            response = self.generate_content(
-                model_name=settings.GEMINI_MODEL,
-                contents=contents
-            )
+            response = self.generate_content(model_name=settings.gemini_model, contents=contents)
 
             # Track token usage
-            if hasattr(response, 'usage_metadata'):
+            if hasattr(response, "usage_metadata"):
                 total_tokens += response.usage_metadata.total_token_count
 
             # Parse components from response
@@ -328,11 +337,13 @@ class ScheduleAgentV2(BaseAgentV2):
             processing_metadata={
                 "tokens_used": total_tokens,
                 "estimated_cost": estimated_cost,
-                "processing_method": "page_by_page"
-            }
+                "processing_method": "page_by_page",
+            },
         )
 
-    def _build_page_content(self, page_data: dict[str, Any], page_num: int, total_pages: int, context_section: str = "") -> list[Any]:
+    def _build_page_content(
+        self, page_data: dict[str, Any], page_num: int, total_pages: int, context_section: str = ""
+    ) -> list[Any]:
         """Build content for Gemini from page data.
 
         Args:
@@ -348,9 +359,7 @@ class ScheduleAgentV2(BaseAgentV2):
 
         # Add prompt with context
         prompt = self.prompt_template.format(
-            context_section=context_section,
-            page_number=page_num,
-            total_pages=total_pages
+            context_section=context_section, page_number=page_num, total_pages=total_pages
         )
         contents.append(prompt)
 
@@ -358,12 +367,13 @@ class ScheduleAgentV2(BaseAgentV2):
         if "image" in page_data and isinstance(page_data["image"], Image.Image):
             # For GenAI SDK, we need to save image temporarily
             img_buffer = io.BytesIO()
-            page_data["image"].save(img_buffer, format='PNG')
+            page_data["image"].save(img_buffer, format="PNG")
             img_buffer.seek(0)
 
             # Create a temporary file
             import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
                 tmp_file.write(img_buffer.getvalue())
                 tmp_path = tmp_file.name
 
@@ -394,8 +404,8 @@ class ScheduleAgentV2(BaseAgentV2):
             response_text = response.text
 
             # Find JSON content
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
 
             if json_start >= 0 and json_end > json_start:
                 json_str = response_text[json_start:json_end]
@@ -414,14 +424,11 @@ class ScheduleAgentV2(BaseAgentV2):
                         components.append(component)
 
                     if components:
-                        pages.append(PageComponents(
-                            page_num=page_data["page_num"],
-                            components=components
-                        ))
+                        pages.append(PageComponents(page_num=page_data["page_num"], components=components))
 
                 # Track token usage
                 tokens_used = 0
-                if hasattr(response, 'usage_metadata'):
+                if hasattr(response, "usage_metadata"):
                     tokens_used = response.usage_metadata.total_token_count
 
                 return ComponentExtractionResult(
@@ -429,8 +436,8 @@ class ScheduleAgentV2(BaseAgentV2):
                     processing_metadata={
                         "tokens_used": tokens_used,
                         "estimated_cost": (tokens_used / 1_000_000) * 2.50,
-                        "processing_method": "native_pdf"
-                    }
+                        "processing_method": "native_pdf",
+                    },
                 )
             else:
                 raise ValueError("No valid JSON found in response")
@@ -452,8 +459,8 @@ class ScheduleAgentV2(BaseAgentV2):
         try:
             # Similar parsing logic but for single page
             response_text = response.text
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
 
             if json_start >= 0 and json_end > json_start:
                 json_str = response_text[json_start:json_end]

@@ -301,7 +301,10 @@ class ValidationSuite:
                 "evaluation_details": evaluation
             })
 
-            logger.info(f"Completed {drawing_path.name}: {evaluation.get('overall_assessment', 'Unknown')} - {len(flattened_components)} components")
+            logger.info(
+                f"Completed {drawing_path.name}: {evaluation.get('overall_assessment', 'Unknown')} "
+                f"- {len(flattened_components)} components"
+            )
 
         except Exception as e:
             logger.error(f"Error processing {drawing_path.name}: {e}")

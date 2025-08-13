@@ -30,11 +30,11 @@ class ContextAgent(BaseAgentV2):
         file_path = Path(file_path)
         file_extension = file_path.suffix.lower()
 
-        if file_extension == '.docx':
+        if file_extension == ".docx":
             return await self._process_docx_file(file_path)
-        elif file_extension == '.pdf':
+        elif file_extension == ".pdf":
             return await self._process_pdf_file(file_path)
-        elif file_extension in ['.txt', '.text']:
+        elif file_extension in [".txt", ".text"]:
             return await self._process_text_file(file_path)
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")
@@ -52,7 +52,7 @@ class ContextAgent(BaseAgentV2):
 
         try:
             response = await self._generate_with_retry(prompt, model_name=self.model_name)
-            content = response.text if hasattr(response, 'text') else str(response)
+            content = response.text if hasattr(response, "text") else str(response)
             return self._parse_json_response(content)
         except Exception as e:
             logger.error(f"Error summarizing specifications: {e}")
@@ -82,23 +82,23 @@ class ContextAgent(BaseAgentV2):
 
             for paragraph in doc.paragraphs:
                 # Check if it's a heading
-                if paragraph.style.name.startswith('Heading'):
+                if paragraph.style.name.startswith("Heading"):
                     # Save current section if it has content
                     if current_section["content"]:
                         current_section["content"] = "\n".join(current_section["content"])
                         sections.append(current_section)
 
                     # Start new section
-                    section_type = "specification" if any(
-                        keyword in paragraph.text.lower()
-                        for keyword in ["specification", "requirement", "lock", "hardware", "standard"]
-                    ) else "general"
+                    section_type = (
+                        "specification"
+                        if any(
+                            keyword in paragraph.text.lower()
+                            for keyword in ["specification", "requirement", "lock", "hardware", "standard"]
+                        )
+                        else "general"
+                    )
 
-                    current_section = {
-                        "title": paragraph.text,
-                        "content": [],
-                        "type": section_type
-                    }
+                    current_section = {"title": paragraph.text, "content": [], "type": section_type}
                 else:
                     # Add to current section
                     if paragraph.text.strip():
@@ -113,11 +113,7 @@ class ContextAgent(BaseAgentV2):
             for i, table in enumerate(doc.tables):
                 table_content = self._extract_table_content(table)
                 if table_content:
-                    sections.append({
-                        "title": f"Table {i + 1}",
-                        "content": table_content,
-                        "type": "specification"
-                    })
+                    sections.append({"title": f"Table {i + 1}", "content": table_content, "type": "specification"})
 
             # Use Gemini Flash to further structure the content
             full_text = "\n\n".join([f"{s['title']}:\n{s['content']}" for s in sections])
@@ -146,7 +142,8 @@ class ContextAgent(BaseAgentV2):
             uploaded_file = self.upload_file(str(file_path))
 
             # Build multimodal prompt
-            prompt = """Analyze this PDF document and extract structured information for a security access control system.
+            prompt = """
+Analyze this PDF document and extract structured information for a security access control system.
 
 Extract the following:
 1. Lock types and specifications (especially types 11-22 if present)
@@ -173,10 +170,10 @@ Return a JSON object with this structure:
                     "temperature": 0.1,
                     "top_p": 0.95,
                     "max_output_tokens": 8192,
-                }
+                },
             )
 
-            content = response.text if hasattr(response, 'text') else str(response)
+            content = response.text if hasattr(response, "text") else str(response)
             return self._parse_json_response(content)
 
         except Exception as e:
@@ -193,7 +190,7 @@ Return a JSON object with this structure:
             Structured context data
         """
         try:
-            with open(file_path, encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             return await self.summarize_specifications(content)
@@ -277,11 +274,13 @@ Return a JSON object with this structure:
             logger.warning(f"Failed to parse JSON response: {e}")
             # Return a basic structure with raw content
             return {
-                "sections": [{
-                    "title": "Raw Content",
-                    "content": response[:5000],  # Limit size
-                    "type": "general"
-                }]
+                "sections": [
+                    {
+                        "title": "Raw Content",
+                        "content": response[:5000],  # Limit size
+                        "type": "general",
+                    }
+                ]
             }
 
     async def process(self, input_data: dict[str, Any]) -> dict[str, Any]:
@@ -298,8 +297,7 @@ Return a JSON object with this structure:
         """
         start_time = datetime.utcnow()
 
-        self.log_structured("info", "Starting context processing",
-                          context_type=input_data.get("context_type"))
+        self.log_structured("info", "Starting context processing", context_type=input_data.get("context_type"))
 
         try:
             # Check if context is provided
@@ -307,12 +305,7 @@ Return a JSON object with this structure:
                 self.log_structured("info", "No context provided, skipping context processing")
                 return {
                     "sections": [],
-                    "metadata": {
-                        "source_type": "none",
-                        "sections_count": 0,
-                        "tokens_used": 0,
-                        "processing_time_ms": 0
-                    }
+                    "metadata": {"source_type": "none", "sections_count": 0, "tokens_used": 0, "processing_time_ms": 0},
                 }
 
             # Process based on input type
@@ -341,35 +334,39 @@ Return a JSON object with this structure:
                     "source_type": input_data.get("context_type", {}).get("type", "unknown"),
                     "sections_count": len(context_data.get("sections", [])),
                     "tokens_used": tokens_used,
-                    "processing_time_ms": int(processing_time)
-                }
+                    "processing_time_ms": int(processing_time),
+                },
             }
 
             # Log metrics
-            self.log_structured("info", "Context processing complete",
-                              sections_found=result["metadata"]["sections_count"],
-                              tokens_used=tokens_used,
-                              processing_time_ms=int(processing_time))
+            self.log_structured(
+                "info",
+                "Context processing complete",
+                sections_found=result["metadata"]["sections_count"],
+                tokens_used=tokens_used,
+                processing_time_ms=int(processing_time),
+            )
 
             # Save checkpoint
             await self.save_checkpoint("context", result)
 
             # Update job metadata
-            self.job.update_metadata({
-                "context_processing": {
-                    "type": result["metadata"]["source_type"],
-                    "sections_found": result["metadata"]["sections_count"],
-                    "tokens_used": tokens_used
+            self.job.update_metadata(
+                {
+                    "context_processing": {
+                        "type": result["metadata"]["source_type"],
+                        "sections_found": result["metadata"]["sections_count"],
+                        "tokens_used": tokens_used,
+                    }
                 }
-            })
+            )
 
             return result
 
         except Exception as e:
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
-            self.log_structured("error", f"Context processing failed: {e!s}",
-                              error_type=type(e).__name__)
+            self.log_structured("error", f"Context processing failed: {e!s}", error_type=type(e).__name__)
 
             # Return empty context on failure (graceful degradation)
             return {
@@ -379,6 +376,6 @@ Return a JSON object with this structure:
                     "sections_count": 0,
                     "tokens_used": 0,
                     "processing_time_ms": int(processing_time),
-                    "error": str(e)
-                }
+                    "error": str(e),
+                },
             }

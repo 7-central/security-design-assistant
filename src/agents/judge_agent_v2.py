@@ -33,9 +33,11 @@ class JudgeAgentV2(BaseAgentV2):
 
     def _get_fallback_prompt(self) -> str:
         """Get fallback prompt if template file is not available."""
-        return """You are evaluating the quality of a security drawing processing pipeline that extracts access control components.
+        return """
+You are evaluating the quality of a security drawing processing pipeline that extracts access control components.
 
-Pipeline Scope: This system extracts access control components (readers, exit buttons, door controllers, etc.) from security drawings and generates Excel schedules.
+Pipeline Scope: This system extracts access control components (readers, exit buttons, door controllers, etc.)
+from security drawings and generates Excel schedules.
 
 {drawing_info}
 
@@ -69,11 +71,7 @@ Provide your evaluation in the following JSON format:
 }}"""
 
     def _build_evaluation_prompt(
-        self,
-        drawing_path: Path | None,
-        components: list[dict],
-        excel_path: Path | None,
-        context: dict | None
+        self, drawing_path: Path | None, components: list[dict], excel_path: Path | None, context: dict | None
     ) -> tuple[str, list[genai.types.File]]:
         """Build prompt for quality evaluation with file uploads.
 
@@ -109,14 +107,19 @@ Provide your evaluation in the following JSON format:
             # Show first 5 components as examples
             components_info += "Sample components:\n"
             for comp in components[:5]:
-                components_info += f"  - ID: {comp.get('id', 'N/A')}, Type: {comp.get('type', 'N/A')}, Location: {comp.get('location', 'N/A')}\n"
+                components_info += (
+                    f"  - ID: {comp.get('id', 'N/A')}, "
+                    f"Type: {comp.get('type', 'N/A')}, "
+                    f"Location: {comp.get('location', 'N/A')}\
+"
+                )
             if len(components) > 5:
                 components_info += f"  ... and {len(components) - 5} more components\n"
 
             # Add component statistics
             type_counts = {}
             for comp in components:
-                comp_type = comp.get('type', 'unknown')
+                comp_type = comp.get("type", "unknown")
                 type_counts[comp_type] = type_counts.get(comp_type, 0) + 1
             components_info += "\nComponent type distribution:\n"
             for comp_type, count in sorted(type_counts.items()):
@@ -142,10 +145,7 @@ Provide your evaluation in the following JSON format:
         # Load and format prompt template
         prompt_template = self._load_prompt_template()
         prompt = prompt_template.format(
-            drawing_info=drawing_info,
-            context_info=context_info,
-            components_info=components_info,
-            excel_info=excel_info
+            drawing_info=drawing_info, context_info=context_info, components_info=components_info, excel_info=excel_info
         )
 
         return prompt, files_to_upload
@@ -159,7 +159,7 @@ Provide your evaluation in the following JSON format:
             "context_usage",
             "spatial_understanding",
             "false_positives",
-            "improvement_suggestions"
+            "improvement_suggestions",
         ]
 
         # Add missing fields with defaults
@@ -209,15 +209,11 @@ Provide your evaluation in the following JSON format:
                 "spatial_understanding": "Unable to evaluate",
                 "false_positives": "Unable to evaluate",
                 "improvement_suggestions": ["Fix evaluation errors and retry"],
-                "error": str(e)
+                "error": str(e),
             }
 
     async def evaluate_extraction(
-        self,
-        drawing_path: Path | None,
-        context: dict | None,
-        components: list[dict],
-        excel_path: Path | None
+        self, drawing_path: Path | None, context: dict | None, components: list[dict], excel_path: Path | None
     ) -> dict[str, Any]:
         """Evaluate the quality of extraction and generation.
 
@@ -234,9 +230,7 @@ Provide your evaluation in the following JSON format:
 
         try:
             # Build evaluation prompt with file uploads
-            prompt, files = self._build_evaluation_prompt(
-                drawing_path, components, excel_path, context
-            )
+            prompt, files = self._build_evaluation_prompt(drawing_path, components, excel_path, context)
 
             # Generate evaluation using Gemini
             if files:
@@ -249,21 +243,20 @@ Provide your evaluation in the following JSON format:
 
             # Log evaluation results
             self.log_structured(
-                "info",
-                f"Evaluation complete - Assessment: {evaluation.get('overall_assessment', 'Unknown')}"
+                "info", f"Evaluation complete - Assessment: {evaluation.get('overall_assessment', 'Unknown')}"
             )
 
             # Log assessment trend for analytics
-            assessment = evaluation.get('overall_assessment', '')
-            if 'Good' in assessment:
+            assessment = evaluation.get("overall_assessment", "")
+            if "Good" in assessment:
                 self.log_structured("info", "Assessment trend: Good")
-            elif 'Fair' in assessment:
+            elif "Fair" in assessment:
                 self.log_structured("info", "Assessment trend: Fair")
-            elif 'Poor' in assessment:
+            elif "Poor" in assessment:
                 self.log_structured("info", "Assessment trend: Poor")
 
             # Log common improvement suggestions
-            suggestions = evaluation.get('improvement_suggestions', [])
+            suggestions = evaluation.get("improvement_suggestions", [])
             if suggestions:
                 self.log_structured("info", f"Improvement suggestions: {', '.join(suggestions[:2])}")
 
@@ -271,27 +264,36 @@ Provide your evaluation in the following JSON format:
 
         except Exception as e:
             self.log_structured("error", f"Judge evaluation failed: {e}")
-            return self._validate_evaluation({
-                "overall_assessment": f"Poor performance - evaluation error: {e}",
-                "error": str(e)
-            })
+            return self._validate_evaluation(
+                {"overall_assessment": f"Poor performance - evaluation error: {e}", "error": str(e)}
+            )
 
     async def _generate_with_files(self, prompt: str, files: list[genai.types.File]) -> str:
         """Generate response with uploaded files."""
         try:
-            response = await self.client.models.generate_content(
+            # Convert File objects to proper Part format (like Schedule Agent does)
+            from google.genai import types
+
+            file_parts = []
+            for file in files:
+                file_part = types.Part(
+                    file_data=types.FileData(file_uri=file.uri, mime_type=file.mime_type or "application/pdf")
+                )
+                file_parts.append(file_part)
+
+            response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[
-                    *files,  # Include uploaded files
-                    prompt
+                    *file_parts,  # Include uploaded files as Parts
+                    prompt,
                 ],
-                config=genai.types.GenerateContentConfig(
-                    temperature=0.3,
-                    top_p=0.9,
-                    max_output_tokens=4096
-                )
+                config=genai.types.GenerateContentConfig(temperature=0.3, top_p=0.9, max_output_tokens=4096),
             )
-            return response.text
+            # Ensure we return text, not the response object
+            if hasattr(response, "text"):
+                return response.text
+            else:
+                return str(response)
         except Exception as e:
             self.log_structured("error", f"Generation with files failed: {e}")
             raise
@@ -315,29 +317,24 @@ Provide your evaluation in the following JSON format:
             context = None
 
             # Get drawing path if available
-            if 'drawing_file' in input_data and input_data['drawing_file']:
-                drawing_path = Path(input_data['drawing_file'])
+            if "drawing_file" in input_data and input_data["drawing_file"]:
+                drawing_path = Path(input_data["drawing_file"])
 
             # Get Excel path if available
-            if 'excel_file' in input_data and input_data['excel_file']:
-                excel_path = Path(input_data['excel_file'])
+            if "excel_file" in input_data and input_data["excel_file"]:
+                excel_path = Path(input_data["excel_file"])
 
             # Get components
             components = self._extract_components(input_data)
 
             # Get context if available
-            context = input_data.get('context')
+            context = input_data.get("context")
 
             # Run evaluation
-            evaluation = await self.evaluate_extraction(
-                drawing_path, context, components, excel_path
-            )
+            evaluation = await self.evaluate_extraction(drawing_path, context, components, excel_path)
 
             # Save evaluation checkpoint
-            await self.save_checkpoint("evaluation", {
-                "evaluation": evaluation,
-                "timestamp": self._get_timestamp()
-            })
+            await self.save_checkpoint("evaluation", {"evaluation": evaluation, "timestamp": self._get_timestamp()})
 
             # Include evaluation in job metadata
             result = {
@@ -345,8 +342,8 @@ Provide your evaluation in the following JSON format:
                 "next_stage": "complete",
                 "metadata": {
                     "overall_assessment": evaluation.get("overall_assessment"),
-                    "suggestions_count": len(evaluation.get("improvement_suggestions", []))
-                }
+                    "suggestions_count": len(evaluation.get("improvement_suggestions", [])),
+                },
             }
 
             return result
@@ -354,16 +351,16 @@ Provide your evaluation in the following JSON format:
         except Exception as e:
             self.log_structured("error", f"Judge process failed: {e}")
             return {
-                "evaluation": self._validate_evaluation({
-                    "overall_assessment": f"Poor performance - process error: {e}",
-                    "error": str(e)
-                }),
-                "next_stage": "complete"
+                "evaluation": self._validate_evaluation(
+                    {"overall_assessment": f"Poor performance - process error: {e}", "error": str(e)}
+                ),
+                "next_stage": "complete",
             }
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
         from datetime import datetime
+
         return datetime.utcnow().isoformat() + "Z"
 
     def _extract_components(self, input_data: dict[str, Any]) -> list[dict]:

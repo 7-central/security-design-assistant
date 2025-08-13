@@ -24,18 +24,18 @@ class UsageAnalyzer:
             environment: Environment name (dev, staging, prod)
         """
         self.environment = environment
-        self.cloudwatch = boto3.client('cloudwatch')
-        self.lambda_client = boto3.client('lambda')
-        self.dynamodb = boto3.client('dynamodb')
-        self.s3 = boto3.client('s3')
+        self.cloudwatch = boto3.client("cloudwatch")
+        self.lambda_client = boto3.client("lambda")
+        self.dynamodb = boto3.client("dynamodb")
+        self.s3 = boto3.client("s3")
 
         # Function names for this environment
         self.function_names = [
-            f'security-assistant-api-{environment}',
-            f'security-assistant-worker-{environment}',
-            f'security-assistant-status-{environment}',
-            f'security-assistant-dlq-processor-{environment}',
-            f'security-assistant-warmer-{environment}'
+            f"security-assistant-api-{environment}",
+            f"security-assistant-worker-{environment}",
+            f"security-assistant-status-{environment}",
+            f"security-assistant-dlq-processor-{environment}",
+            f"security-assistant-warmer-{environment}",
         ]
 
     async def analyze_lambda_usage_patterns(self, days: int = 30) -> dict[str, Any]:
@@ -51,85 +51,80 @@ class UsageAnalyzer:
         start_time = end_time - timedelta(days=days)
 
         analysis = {
-            'analysis_period': f'{days} days',
-            'generated_at': end_time.isoformat(),
-            'functions': {},
-            'summary': {
-                'total_invocations': 0,
-                'total_duration_hours': 0,
-                'total_estimated_cost': 0,
-                'peak_concurrency': 0,
-                'avg_daily_invocations': 0
+            "analysis_period": f"{days} days",
+            "generated_at": end_time.isoformat(),
+            "functions": {},
+            "summary": {
+                "total_invocations": 0,
+                "total_duration_hours": 0,
+                "total_estimated_cost": 0,
+                "peak_concurrency": 0,
+                "avg_daily_invocations": 0,
             },
-            'recommendations': []
+            "recommendations": [],
         }
 
         for function_name in self.function_names:
             try:
-                function_analysis = await self._analyze_single_function(
-                    function_name, start_time, end_time
-                )
-                analysis['functions'][function_name] = function_analysis
+                function_analysis = await self._analyze_single_function(function_name, start_time, end_time)
+                analysis["functions"][function_name] = function_analysis
 
                 # Aggregate summary stats
-                analysis['summary']['total_invocations'] += function_analysis['total_invocations']
-                analysis['summary']['total_duration_hours'] += function_analysis['total_duration_hours']
-                analysis['summary']['total_estimated_cost'] += function_analysis['estimated_cost']
-                analysis['summary']['peak_concurrency'] = max(
-                    analysis['summary']['peak_concurrency'],
-                    function_analysis.get('peak_concurrent_executions', 0)
+                analysis["summary"]["total_invocations"] += function_analysis["total_invocations"]
+                analysis["summary"]["total_duration_hours"] += function_analysis["total_duration_hours"]
+                analysis["summary"]["total_estimated_cost"] += function_analysis["estimated_cost"]
+                analysis["summary"]["peak_concurrency"] = max(
+                    analysis["summary"]["peak_concurrency"], function_analysis.get("peak_concurrent_executions", 0)
                 )
 
             except Exception as e:
                 logger.error(f"Failed to analyze function {function_name}: {e}")
-                analysis['functions'][function_name] = {'error': str(e)}
+                analysis["functions"][function_name] = {"error": str(e)}
 
         # Calculate averages and generate recommendations
         if days > 0:
-            analysis['summary']['avg_daily_invocations'] = analysis['summary']['total_invocations'] / days
+            analysis["summary"]["avg_daily_invocations"] = analysis["summary"]["total_invocations"] / days
 
-        analysis['recommendations'] = await self._generate_capacity_recommendations(analysis)
+        analysis["recommendations"] = await self._generate_capacity_recommendations(analysis)
 
         return analysis
 
     async def _analyze_single_function(
-        self,
-        function_name: str,
-        start_time: datetime,
-        end_time: datetime
+        self, function_name: str, start_time: datetime, end_time: datetime
     ) -> dict[str, Any]:
         """Analyze a single Lambda function's usage patterns."""
-        metrics = {}
 
         # Get invocation metrics
         invocation_data = await self._get_cloudwatch_metric(
-            'AWS/Lambda', 'Invocations', 'FunctionName', function_name,
-            start_time, end_time, 3600  # 1 hour periods
+            "AWS/Lambda",
+            "Invocations",
+            "FunctionName",
+            function_name,
+            start_time,
+            end_time,
+            3600,  # 1 hour periods
         )
 
         # Get duration metrics
         duration_data = await self._get_cloudwatch_metric(
-            'AWS/Lambda', 'Duration', 'FunctionName', function_name,
-            start_time, end_time, 3600
+            "AWS/Lambda", "Duration", "FunctionName", function_name, start_time, end_time, 3600
         )
 
         # Get concurrent execution metrics
         concurrency_data = await self._get_cloudwatch_metric(
-            'AWS/Lambda', 'ConcurrentExecutions', 'FunctionName', function_name,
-            start_time, end_time, 3600
+            "AWS/Lambda", "ConcurrentExecutions", "FunctionName", function_name, start_time, end_time, 3600
         )
 
         # Get memory utilization if available
         memory_data = await self._get_cloudwatch_metric(
-            'AWS/Lambda', 'MemoryUtilization', 'FunctionName', function_name,
-            start_time, end_time, 3600
+            "AWS/Lambda", "MemoryUtilization", "FunctionName", function_name, start_time, end_time, 3600
         )
 
         # Calculate statistics
-        invocations = [dp['Sum'] for dp in invocation_data]
-        durations = [dp['Average'] for dp in duration_data if dp['Average'] > 0]
-        concurrency = [dp['Maximum'] for dp in concurrency_data]
-        memory_util = [dp['Average'] for dp in memory_data if dp['Average'] > 0]
+        invocations = [dp["Sum"] for dp in invocation_data]
+        durations = [dp["Average"] for dp in duration_data if dp["Average"] > 0]
+        concurrency = [dp["Maximum"] for dp in concurrency_data]
+        memory_util = [dp["Average"] for dp in memory_data if dp["Average"] > 0]
 
         total_invocations = sum(invocations)
         total_duration_ms = sum(d * i for d, i in zip(durations, invocations, strict=False) if d and i)
@@ -138,43 +133,40 @@ class UsageAnalyzer:
         # Get current function configuration
         try:
             config_response = self.lambda_client.get_function_configuration(FunctionName=function_name)
-            current_memory = config_response['MemorySize']
-            current_timeout = config_response['Timeout']
-            architecture = config_response.get('Architectures', ['x86_64'])[0]
+            current_memory = config_response["MemorySize"]
+            current_timeout = config_response["Timeout"]
+            architecture = config_response.get("Architectures", ["x86_64"])[0]
         except ClientError:
             current_memory = 0
             current_timeout = 0
-            architecture = 'unknown'
+            architecture = "unknown"
 
         # Calculate cost estimate (ARM64 pricing)
         cost_per_request = 0.0000002  # $0.0000002 per request
-        cost_per_gb_second = 0.0000133334 if architecture == 'arm64' else 0.0000166667
+        cost_per_gb_second = 0.0000133334 if architecture == "arm64" else 0.0000166667
 
         request_cost = total_invocations * cost_per_request
-        compute_cost = (total_duration_hours * (current_memory / 1024) * cost_per_gb_second * 3600)
+        compute_cost = total_duration_hours * (current_memory / 1024) * cost_per_gb_second * 3600
         total_cost = request_cost + compute_cost
 
         return {
-            'total_invocations': int(total_invocations),
-            'total_duration_hours': round(total_duration_hours, 4),
-            'avg_duration_ms': round(statistics.mean(durations), 2) if durations else 0,
-            'p95_duration_ms': round(self._percentile(durations, 0.95), 2) if durations else 0,
-            'p99_duration_ms': round(self._percentile(durations, 0.99), 2) if durations else 0,
-            'peak_concurrent_executions': int(max(concurrency)) if concurrency else 0,
-            'avg_concurrent_executions': round(statistics.mean(concurrency), 2) if concurrency else 0,
-            'current_memory_mb': current_memory,
-            'current_timeout_seconds': current_timeout,
-            'architecture': architecture,
-            'avg_memory_utilization_percent': round(statistics.mean(memory_util), 2) if memory_util else None,
-            'estimated_cost': round(total_cost, 4),
-            'cost_breakdown': {
-                'request_cost': round(request_cost, 4),
-                'compute_cost': round(compute_cost, 4)
-            },
-            'usage_patterns': self._analyze_usage_patterns(invocations),
-            'optimization_opportunities': self._identify_optimizations(
+            "total_invocations": int(total_invocations),
+            "total_duration_hours": round(total_duration_hours, 4),
+            "avg_duration_ms": round(statistics.mean(durations), 2) if durations else 0,
+            "p95_duration_ms": round(self._percentile(durations, 0.95), 2) if durations else 0,
+            "p99_duration_ms": round(self._percentile(durations, 0.99), 2) if durations else 0,
+            "peak_concurrent_executions": int(max(concurrency)) if concurrency else 0,
+            "avg_concurrent_executions": round(statistics.mean(concurrency), 2) if concurrency else 0,
+            "current_memory_mb": current_memory,
+            "current_timeout_seconds": current_timeout,
+            "architecture": architecture,
+            "avg_memory_utilization_percent": round(statistics.mean(memory_util), 2) if memory_util else None,
+            "estimated_cost": round(total_cost, 4),
+            "cost_breakdown": {"request_cost": round(request_cost, 4), "compute_cost": round(compute_cost, 4)},
+            "usage_patterns": self._analyze_usage_patterns(invocations),
+            "optimization_opportunities": self._identify_optimizations(
                 durations, concurrency, memory_util, current_memory
-            )
+            ),
         }
 
     def _percentile(self, data: list[float], percentile: float) -> float:
@@ -190,7 +182,7 @@ class UsageAnalyzer:
     def _analyze_usage_patterns(self, hourly_invocations: list[float]) -> dict[str, Any]:
         """Analyze usage patterns from hourly invocation data."""
         if not hourly_invocations:
-            return {'pattern': 'no_data'}
+            return {"pattern": "no_data"}
 
         # Calculate statistics
         total_invocations = sum(hourly_invocations)
@@ -202,30 +194,26 @@ class UsageAnalyzer:
 
         # Determine usage pattern
         if non_zero_hours < len(hourly_invocations) * 0.1:
-            pattern = 'sporadic'
+            pattern = "sporadic"
         elif zero_hours < len(hourly_invocations) * 0.1:
-            pattern = 'continuous'
+            pattern = "continuous"
         elif peak_invocations > avg_invocations * 5:
-            pattern = 'bursty'
+            pattern = "bursty"
         else:
-            pattern = 'regular'
+            pattern = "regular"
 
         return {
-            'pattern': pattern,
-            'total_invocations': int(total_invocations),
-            'active_hours': non_zero_hours,
-            'idle_hours': zero_hours,
-            'avg_invocations_per_hour': round(avg_invocations, 2),
-            'peak_invocations_per_hour': int(peak_invocations),
-            'utilization_rate': round(non_zero_hours / len(hourly_invocations), 2)
+            "pattern": pattern,
+            "total_invocations": int(total_invocations),
+            "active_hours": non_zero_hours,
+            "idle_hours": zero_hours,
+            "avg_invocations_per_hour": round(avg_invocations, 2),
+            "peak_invocations_per_hour": int(peak_invocations),
+            "utilization_rate": round(non_zero_hours / len(hourly_invocations), 2),
         }
 
     def _identify_optimizations(
-        self,
-        durations: list[float],
-        concurrency: list[float],
-        memory_util: list[float],
-        current_memory: int
+        self, durations: list[float], concurrency: list[float], memory_util: list[float], current_memory: int
     ) -> list[str]:
         """Identify optimization opportunities."""
         optimizations = []
@@ -233,23 +221,23 @@ class UsageAnalyzer:
         if durations:
             avg_duration = statistics.mean(durations)
             if avg_duration > 10000:  # > 10 seconds
-                optimizations.append('Consider increasing memory to reduce duration')
+                optimizations.append("Consider increasing memory to reduce duration")
             elif avg_duration < 1000 and current_memory > 512:  # < 1 second
-                optimizations.append('Consider reducing memory allocation')
+                optimizations.append("Consider reducing memory allocation")
 
         if memory_util:
             avg_memory_util = statistics.mean(memory_util)
             if avg_memory_util > 80:
-                optimizations.append('High memory utilization - consider increasing memory')
+                optimizations.append("High memory utilization - consider increasing memory")
             elif avg_memory_util < 30 and current_memory > 512:
-                optimizations.append('Low memory utilization - consider reducing memory')
+                optimizations.append("Low memory utilization - consider reducing memory")
 
         if concurrency:
             max_concurrency = max(concurrency)
             if max_concurrency > 50:
-                optimizations.append('High concurrency - consider reserved capacity')
+                optimizations.append("High concurrency - consider reserved capacity")
             elif max_concurrency < 5:
-                optimizations.append('Low concurrency - provisioned concurrency may not be needed')
+                optimizations.append("Low concurrency - provisioned concurrency may not be needed")
 
         return optimizations
 
@@ -261,22 +249,20 @@ class UsageAnalyzer:
         dimension_value: str,
         start_time: datetime,
         end_time: datetime,
-        period: int
+        period: int,
     ) -> list[dict[str, Any]]:
         """Get CloudWatch metric data."""
         try:
             response = self.cloudwatch.get_metric_statistics(
                 Namespace=namespace,
                 MetricName=metric_name,
-                Dimensions=[
-                    {'Name': dimension_name, 'Value': dimension_value}
-                ],
+                Dimensions=[{"Name": dimension_name, "Value": dimension_value}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=period,
-                Statistics=['Sum', 'Average', 'Maximum']
+                Statistics=["Sum", "Average", "Maximum"],
             )
-            return response.get('Datapoints', [])
+            return response.get("Datapoints", [])
         except Exception as e:
             logger.warning(f"Failed to get metric {metric_name} for {dimension_value}: {e}")
             return []
@@ -285,62 +271,74 @@ class UsageAnalyzer:
         """Generate capacity planning recommendations based on analysis."""
         recommendations = []
 
-        summary = analysis['summary']
-        functions = analysis['functions']
+        summary = analysis["summary"]
+        functions = analysis["functions"]
 
         # Overall cost optimization recommendations
-        if summary['total_estimated_cost'] > 100:  # > $100/month
-            recommendations.append({
-                'category': 'cost_optimization',
-                'priority': 'high',
-                'title': 'Significant monthly costs detected',
-                'description': f"Current estimated cost: ${summary['total_estimated_cost']:.2f}/month",
-                'action': 'Review high-cost functions and consider memory optimization'
-            })
+        if summary["total_estimated_cost"] > 100:  # > $100/month
+            recommendations.append(
+                {
+                    "category": "cost_optimization",
+                    "priority": "high",
+                    "title": "Significant monthly costs detected",
+                    "description": f"Current estimated cost: ${summary['total_estimated_cost']:.2f}/month",
+                    "action": "Review high-cost functions and consider memory optimization",
+                }
+            )
 
         # Concurrency recommendations
-        if summary['peak_concurrency'] > 100:
-            recommendations.append({
-                'category': 'capacity_planning',
-                'priority': 'medium',
-                'title': 'High peak concurrency detected',
-                'description': f"Peak concurrency: {summary['peak_concurrency']} executions",
-                'action': 'Consider reserved concurrency and DLQ monitoring'
-            })
+        if summary["peak_concurrency"] > 100:
+            recommendations.append(
+                {
+                    "category": "capacity_planning",
+                    "priority": "medium",
+                    "title": "High peak concurrency detected",
+                    "description": f"Peak concurrency: {summary['peak_concurrency']} executions",
+                    "action": "Consider reserved concurrency and DLQ monitoring",
+                }
+            )
 
         # Function-specific recommendations
         for func_name, func_data in functions.items():
-            if isinstance(func_data, dict) and 'error' not in func_data:
+            if isinstance(func_data, dict) and "error" not in func_data:
                 # Memory optimization recommendations
-                if func_data.get('avg_memory_utilization_percent', 0) > 85:
-                    recommendations.append({
-                        'category': 'performance',
-                        'priority': 'medium',
-                        'title': f'High memory utilization in {func_name}',
-                        'description': f"Average memory utilization: {func_data['avg_memory_utilization_percent']:.1f}%",
-                        'action': f'Increase memory from {func_data["current_memory_mb"]}MB'
-                    })
+                if func_data.get("avg_memory_utilization_percent", 0) > 85:
+                    recommendations.append(
+                        {
+                            "category": "performance",
+                            "priority": "medium",
+                            "title": f"High memory utilization in {func_name}",
+                            "description": (
+                                f"Average memory utilization: " f"{func_data['avg_memory_utilization_percent']:.1f}%"
+                            ),
+                            "action": f'Increase memory from {func_data["current_memory_mb"]}MB',
+                        }
+                    )
 
                 # Duration optimization
-                if func_data.get('p95_duration_ms', 0) > 30000:  # > 30 seconds
-                    recommendations.append({
-                        'category': 'performance',
-                        'priority': 'high',
-                        'title': f'Slow execution time in {func_name}',
-                        'description': f"P95 duration: {func_data['p95_duration_ms']:.0f}ms",
-                        'action': 'Investigate performance bottlenecks and consider memory increase'
-                    })
+                if func_data.get("p95_duration_ms", 0) > 30000:  # > 30 seconds
+                    recommendations.append(
+                        {
+                            "category": "performance",
+                            "priority": "high",
+                            "title": f"Slow execution time in {func_name}",
+                            "description": f"P95 duration: {func_data['p95_duration_ms']:.0f}ms",
+                            "action": "Investigate performance bottlenecks and consider memory increase",
+                        }
+                    )
 
                 # Usage pattern recommendations
-                pattern = func_data.get('usage_patterns', {}).get('pattern', 'unknown')
-                if pattern == 'sporadic' and 'api' in func_name:
-                    recommendations.append({
-                        'category': 'cost_optimization',
-                        'priority': 'low',
-                        'title': f'Sporadic usage pattern in {func_name}',
-                        'description': 'Function has low utilization',
-                        'action': 'Consider reducing provisioned concurrency or memory'
-                    })
+                pattern = func_data.get("usage_patterns", {}).get("pattern", "unknown")
+                if pattern == "sporadic" and "api" in func_name:
+                    recommendations.append(
+                        {
+                            "category": "cost_optimization",
+                            "priority": "low",
+                            "title": f"Sporadic usage pattern in {func_name}",
+                            "description": "Function has low utilization",
+                            "action": "Consider reducing provisioned concurrency or memory",
+                        }
+                    )
 
         return recommendations
 
@@ -366,14 +364,14 @@ class UsageAnalyzer:
 
         # Create final report
         report = {
-            'report_type': 'capacity_planning',
-            'environment': self.environment,
-            'analysis_period_days': days,
-            'generated_at': datetime.utcnow().isoformat(),
-            'usage_analysis': usage_analysis,
-            'provisioned_resources': provisioned_resources,
-            'cost_projections': cost_projections,
-            'executive_summary': self._create_executive_summary(usage_analysis, cost_projections)
+            "report_type": "capacity_planning",
+            "environment": self.environment,
+            "analysis_period_days": days,
+            "generated_at": datetime.utcnow().isoformat(),
+            "usage_analysis": usage_analysis,
+            "provisioned_resources": provisioned_resources,
+            "cost_projections": cost_projections,
+            "executive_summary": self._create_executive_summary(usage_analysis, cost_projections),
         }
 
         logger.info(f"Capacity report generated with {len(usage_analysis['recommendations'])} recommendations")
@@ -381,23 +379,19 @@ class UsageAnalyzer:
 
     async def _get_provisioned_resources(self) -> dict[str, Any]:
         """Get information about currently provisioned resources."""
-        resources = {
-            'lambda_functions': {},
-            'dynamodb_tables': {},
-            's3_buckets': {}
-        }
+        resources = {"lambda_functions": {}, "dynamodb_tables": {}, "s3_buckets": {}}
 
         # Get Lambda function configurations
         for func_name in self.function_names:
             try:
                 config = self.lambda_client.get_function_configuration(FunctionName=func_name)
-                resources['lambda_functions'][func_name] = {
-                    'memory_mb': config['MemorySize'],
-                    'timeout_seconds': config['Timeout'],
-                    'runtime': config['Runtime'],
-                    'architecture': config.get('Architectures', ['x86_64'])[0],
-                    'reserved_concurrency': config.get('ReservedConcurrencyExecutions'),
-                    'provisioned_concurrency': None  # Would need additional call to get this
+                resources["lambda_functions"][func_name] = {
+                    "memory_mb": config["MemorySize"],
+                    "timeout_seconds": config["Timeout"],
+                    "runtime": config["Runtime"],
+                    "architecture": config.get("Architectures", ["x86_64"])[0],
+                    "reserved_concurrency": config.get("ReservedConcurrencyExecutions"),
+                    "provisioned_concurrency": None,  # Would need additional call to get this
                 }
             except ClientError as e:
                 logger.warning(f"Could not get config for {func_name}: {e}")
@@ -406,63 +400,64 @@ class UsageAnalyzer:
 
     def _generate_cost_projections(self, usage_analysis: dict[str, Any]) -> dict[str, Any]:
         """Generate cost projections based on usage analysis."""
-        current_monthly_cost = usage_analysis['summary']['total_estimated_cost']
+        current_monthly_cost = usage_analysis["summary"]["total_estimated_cost"]
 
         # Project costs for different scenarios
         projections = {
-            'current_monthly': round(current_monthly_cost, 2),
-            'projected_yearly': round(current_monthly_cost * 12, 2),
-            'scenarios': {
-                'optimized': {
-                    'monthly_cost': round(current_monthly_cost * 0.8, 2),  # 20% reduction
-                    'savings_monthly': round(current_monthly_cost * 0.2, 2),
-                    'description': 'With memory and concurrency optimizations'
+            "current_monthly": round(current_monthly_cost, 2),
+            "projected_yearly": round(current_monthly_cost * 12, 2),
+            "scenarios": {
+                "optimized": {
+                    "monthly_cost": round(current_monthly_cost * 0.8, 2),  # 20% reduction
+                    "savings_monthly": round(current_monthly_cost * 0.2, 2),
+                    "description": "With memory and concurrency optimizations",
                 },
-                'growth_50_percent': {
-                    'monthly_cost': round(current_monthly_cost * 1.5, 2),
-                    'additional_monthly': round(current_monthly_cost * 0.5, 2),
-                    'description': 'With 50% usage growth'
+                "growth_50_percent": {
+                    "monthly_cost": round(current_monthly_cost * 1.5, 2),
+                    "additional_monthly": round(current_monthly_cost * 0.5, 2),
+                    "description": "With 50% usage growth",
                 },
-                'growth_100_percent': {
-                    'monthly_cost': round(current_monthly_cost * 2, 2),
-                    'additional_monthly': round(current_monthly_cost, 2),
-                    'description': 'With 100% usage growth'
-                }
-            }
+                "growth_100_percent": {
+                    "monthly_cost": round(current_monthly_cost * 2, 2),
+                    "additional_monthly": round(current_monthly_cost, 2),
+                    "description": "With 100% usage growth",
+                },
+            },
         }
 
         return projections
 
     def _create_executive_summary(
-        self,
-        usage_analysis: dict[str, Any],
-        cost_projections: dict[str, Any]
+        self, usage_analysis: dict[str, Any], cost_projections: dict[str, Any]
     ) -> dict[str, Any]:
         """Create executive summary of the capacity report."""
-        summary = usage_analysis['summary']
-        high_priority_recs = [
-            r for r in usage_analysis['recommendations']
-            if r.get('priority') == 'high'
-        ]
+        summary = usage_analysis["summary"]
+        high_priority_recs = [r for r in usage_analysis["recommendations"] if r.get("priority") == "high"]
 
         return {
-            'key_metrics': {
-                'total_monthly_invocations': int(summary['avg_daily_invocations'] * 30),
-                'current_monthly_cost': cost_projections['current_monthly'],
-                'peak_concurrency': summary['peak_concurrency'],
-                'total_functions': len([f for f in usage_analysis['functions'] if 'error' not in usage_analysis['functions'][f]])
+            "key_metrics": {
+                "total_monthly_invocations": int(summary["avg_daily_invocations"] * 30),
+                "current_monthly_cost": cost_projections["current_monthly"],
+                "peak_concurrency": summary["peak_concurrency"],
+                "total_functions": len(
+                    [f for f in usage_analysis["functions"] if "error" not in usage_analysis["functions"][f]]
+                ),
             },
-            'critical_findings': {
-                'high_priority_issues': len(high_priority_recs),
-                'cost_optimization_potential': f"${cost_projections['scenarios']['optimized']['savings_monthly']:.2f}/month",
-                'performance_issues': len([r for r in usage_analysis['recommendations'] if r.get('category') == 'performance'])
+            "critical_findings": {
+                "high_priority_issues": len(high_priority_recs),
+                "cost_optimization_potential": (
+                    f"${cost_projections['scenarios']['optimized']['savings_monthly']:.2f}/month"
+                ),
+                "performance_issues": len(
+                    [r for r in usage_analysis["recommendations"] if r.get("category") == "performance"]
+                ),
             },
-            'next_actions': [
-                'Review and implement high-priority recommendations',
-                'Set up automated monitoring for cost anomalies',
-                'Schedule monthly capacity reviews',
-                'Consider implementing usage-based scaling'
-            ]
+            "next_actions": [
+                "Review and implement high-priority recommendations",
+                "Set up automated monitoring for cost anomalies",
+                "Schedule monthly capacity reviews",
+                "Consider implementing usage-based scaling",
+            ],
         }
 
 
@@ -481,7 +476,7 @@ async def run_usage_analysis(environment: str, days: int = 30) -> None:
     print(json.dumps(report, indent=2, default=str))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
     import sys
 

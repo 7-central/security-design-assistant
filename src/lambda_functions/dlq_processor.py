@@ -43,52 +43,42 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # Initialize storage and SNS
     storage = StorageManager.get_storage()
-    sns_client = boto3.client('sns')
+    sns_client = boto3.client("sns")
 
     processed_records = []
 
-    for record in event.get('Records', []):
+    for record in event.get("Records", []):
         try:
             # Parse SQS message from DLQ
-            message_body = json.loads(record['body'])
+            message_body = json.loads(record["body"])
             correlation_id = create_correlation_id()
 
             logger.info(f"Processing DLQ message: {correlation_id}")
 
             # Process the failed job
-            result = await_sync(process_failed_job(
-                storage, sns_client, message_body, record, correlation_id
-            ))
+            result = await_sync(process_failed_job(storage, sns_client, message_body, record, correlation_id))
 
-            processed_records.append({
-                'correlation_id': correlation_id,
-                'job_id': result.get('job_id', 'unknown'),
-                'status': 'processed',
-                'action': result.get('action', 'logged')
-            })
+            processed_records.append(
+                {
+                    "correlation_id": correlation_id,
+                    "job_id": result.get("job_id", "unknown"),
+                    "status": "processed",
+                    "action": result.get("action", "logged"),
+                }
+            )
 
         except Exception as e:
             logger.error(f"Error processing DLQ record: {e}", exc_info=True)
-            processed_records.append({
-                'status': 'error',
-                'error': str(e)
-            })
+            processed_records.append({"status": "error", "error": str(e)})
 
     return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'processed_records': len(processed_records),
-            'results': processed_records
-        })
+        "statusCode": 200,
+        "body": json.dumps({"processed_records": len(processed_records), "results": processed_records}),
     }
 
 
 async def process_failed_job(
-    storage,
-    sns_client: boto3.client,
-    message_body: dict[str, Any],
-    sqs_record: dict[str, Any],
-    correlation_id: str
+    storage, sns_client: boto3.client, message_body: dict[str, Any], sqs_record: dict[str, Any], correlation_id: str
 ) -> dict[str, Any]:
     """
     Process a single failed job from the DLQ.
@@ -104,8 +94,8 @@ async def process_failed_job(
         Processing results
     """
 
-    job_id = message_body.get('job_id', 'unknown')
-    company_client_job = message_body.get('company_client_job', f'unknown#{job_id}')
+    job_id = message_body.get("job_id", "unknown")
+    company_client_job = message_body.get("company_client_job", f"unknown#{job_id}")
 
     try:
         # Analyze failure details
@@ -117,9 +107,9 @@ async def process_failed_job(
         # Determine if this is a critical failure requiring alert
         if is_critical_failure(failure_analysis):
             await send_critical_failure_alert(sns_client, job_id, failure_analysis, correlation_id)
-            action = 'alerted'
+            action = "alerted"
         else:
-            action = 'logged'
+            action = "logged"
 
         # Log detailed failure information
         log_structured_error(
@@ -129,22 +119,24 @@ async def process_failed_job(
                 "company_client_job": company_client_job,
                 "failure_analysis": failure_analysis,
                 "sqs_metadata": {
-                    "approximate_receive_count": sqs_record.get('attributes', {}).get('ApproximateReceiveCount'),
-                    "sent_timestamp": sqs_record.get('attributes', {}).get('SentTimestamp'),
-                    "approximate_first_receive_timestamp": sqs_record.get('attributes', {}).get('ApproximateFirstReceiveTimestamp')
-                }
+                    "approximate_receive_count": sqs_record.get("attributes", {}).get("ApproximateReceiveCount"),
+                    "sent_timestamp": sqs_record.get("attributes", {}).get("SentTimestamp"),
+                    "approximate_first_receive_timestamp": sqs_record.get("attributes", {}).get(
+                        "ApproximateFirstReceiveTimestamp"
+                    ),
+                },
             },
             correlation_id,
-            job_id
+            job_id,
         )
 
         logger.info(f"Processed failed job {job_id} with action: {action}")
 
         return {
-            'job_id': job_id,
-            'action': action,
-            'failure_type': failure_analysis['failure_type'],
-            'error_summary': failure_analysis['error_summary']
+            "job_id": job_id,
+            "action": action,
+            "failure_type": failure_analysis["failure_type"],
+            "error_summary": failure_analysis["error_summary"],
         }
 
     except Exception as e:
@@ -164,36 +156,32 @@ def analyze_failure(sqs_record: dict[str, Any], message_body: dict[str, Any]) ->
         Failure analysis dictionary
     """
 
-    attributes = sqs_record.get('attributes', {})
+    attributes = sqs_record.get("attributes", {})
 
     # Calculate failure timing
-    sent_timestamp = int(attributes.get('SentTimestamp', '0')) / 1000
-    first_receive_timestamp = int(attributes.get('ApproximateFirstReceiveTimestamp', '0')) / 1000
+    sent_timestamp = int(attributes.get("SentTimestamp", "0")) / 1000
+    first_receive_timestamp = int(attributes.get("ApproximateFirstReceiveTimestamp", "0")) / 1000
 
     processing_duration = first_receive_timestamp - sent_timestamp if first_receive_timestamp > 0 else 0
 
     # Determine failure type based on patterns
-    receive_count = int(attributes.get('ApproximateReceiveCount', '0'))
+    receive_count = int(attributes.get("ApproximateReceiveCount", "0"))
     failure_type = classify_failure_type(receive_count, processing_duration, message_body)
 
     return {
-        'timestamp': int(time.time()),
-        'failure_type': failure_type,
-        'receive_count': receive_count,
-        'processing_duration_seconds': processing_duration,
-        'sent_timestamp': sent_timestamp,
-        'first_receive_timestamp': first_receive_timestamp,
-        'error_summary': generate_error_summary(failure_type, receive_count, processing_duration),
-        'message_attributes': sqs_record.get('messageAttributes', {}),
-        'original_message': message_body
+        "timestamp": int(time.time()),
+        "failure_type": failure_type,
+        "receive_count": receive_count,
+        "processing_duration_seconds": processing_duration,
+        "sent_timestamp": sent_timestamp,
+        "first_receive_timestamp": first_receive_timestamp,
+        "error_summary": generate_error_summary(failure_type, receive_count, processing_duration),
+        "message_attributes": sqs_record.get("messageAttributes", {}),
+        "original_message": message_body,
     }
 
 
-def classify_failure_type(
-    receive_count: int,
-    processing_duration: float,
-    message_body: dict[str, Any]
-) -> str:
+def classify_failure_type(receive_count: int, processing_duration: float, message_body: dict[str, Any]) -> str:
     """
     Classify the type of failure based on available data.
 
@@ -208,46 +196,46 @@ def classify_failure_type(
 
     # Timeout-related failure
     if processing_duration > 870:  # Close to 15-minute Lambda timeout
-        return 'lambda_timeout'
+        return "lambda_timeout"
 
     # Rate limit failure (inferred from timing patterns)
     if 300 <= processing_duration <= 600:  # 5-10 minute range suggests rate limiting
-        return 'rate_limit_exhausted'
+        return "rate_limit_exhausted"
 
     # Memory/resource failure
     if receive_count >= 3 and processing_duration < 60:
-        return 'resource_exhausted'
+        return "resource_exhausted"
 
     # Infrastructure failure
     if receive_count == 1 and processing_duration < 30:
-        return 'infrastructure_failure'
+        return "infrastructure_failure"
 
     # PDF/input processing failure (check message content)
-    client_name = message_body.get('client_name', '').lower()
-    if 'test' in client_name or 'sample' in client_name:
-        return 'input_validation_failure'
+    client_name = message_body.get("client_name", "").lower()
+    if "test" in client_name or "sample" in client_name:
+        return "input_validation_failure"
 
     # Default classification
     if receive_count >= 3:
-        return 'processing_failure'
+        return "processing_failure"
     else:
-        return 'temporary_failure'
+        return "temporary_failure"
 
 
 def generate_error_summary(failure_type: str, receive_count: int, duration: float) -> str:
     """Generate human-readable error summary."""
 
     summaries = {
-        'lambda_timeout': f'Job exceeded Lambda timeout limit ({duration:.1f}s processing)',
-        'rate_limit_exhausted': f'Gemini API rate limit exhausted after {receive_count} attempts',
-        'resource_exhausted': f'Lambda resource limits exceeded ({receive_count} failures in {duration:.1f}s)',
-        'infrastructure_failure': f'AWS infrastructure failure (immediate failure after {duration:.1f}s)',
-        'input_validation_failure': f'Invalid input data caused {receive_count} processing failures',
-        'processing_failure': f'Persistent processing failure after {receive_count} attempts',
-        'temporary_failure': f'Temporary failure, {receive_count} attempts over {duration:.1f}s'
+        "lambda_timeout": f"Job exceeded Lambda timeout limit ({duration:.1f}s processing)",
+        "rate_limit_exhausted": f"Gemini API rate limit exhausted after {receive_count} attempts",
+        "resource_exhausted": f"Lambda resource limits exceeded ({receive_count} failures in {duration:.1f}s)",
+        "infrastructure_failure": f"AWS infrastructure failure (immediate failure after {duration:.1f}s)",
+        "input_validation_failure": f"Invalid input data caused {receive_count} processing failures",
+        "processing_failure": f"Persistent processing failure after {receive_count} attempts",
+        "temporary_failure": f"Temporary failure, {receive_count} attempts over {duration:.1f}s",
     }
 
-    return summaries.get(failure_type, f'Unknown failure type after {receive_count} attempts')
+    return summaries.get(failure_type, f"Unknown failure type after {receive_count} attempts")
 
 
 def is_critical_failure(failure_analysis: dict[str, Any]) -> bool:
@@ -261,30 +249,21 @@ def is_critical_failure(failure_analysis: dict[str, Any]) -> bool:
         True if critical failure requiring alert
     """
 
-    critical_failure_types = {
-        'infrastructure_failure',
-        'resource_exhausted',
-        'rate_limit_exhausted'
-    }
+    critical_failure_types = {"infrastructure_failure", "resource_exhausted", "rate_limit_exhausted"}
 
     # Critical if specific failure type
-    if failure_analysis['failure_type'] in critical_failure_types:
+    if failure_analysis["failure_type"] in critical_failure_types:
         return True
 
     # Critical if high frequency failures
-    if failure_analysis['receive_count'] >= 3:
+    if failure_analysis["receive_count"] >= 3:
         return True
 
     # Critical if system-wide issues (can be enhanced with pattern detection)
     return False
 
 
-async def update_failed_job_status(
-    storage,
-    job_id: str,
-    failure_analysis: dict[str, Any],
-    correlation_id: str
-) -> None:
+async def update_failed_job_status(storage, job_id: str, failure_analysis: dict[str, Any], correlation_id: str) -> None:
     """
     Update job status to failed with detailed failure information.
 
@@ -309,7 +288,7 @@ async def update_failed_job_status(
             "failed_at": int(time.time()),
             "failure_details": failure_analysis,
             "correlation_id": correlation_id,
-            "dlq_processed": True
+            "dlq_processed": True,
         }
 
         # Preserve existing stages data
@@ -329,10 +308,7 @@ async def update_failed_job_status(
 
 
 async def send_critical_failure_alert(
-    sns_client: boto3.client,
-    job_id: str,
-    failure_analysis: dict[str, Any],
-    correlation_id: str
+    sns_client: boto3.client, job_id: str, failure_analysis: dict[str, Any], correlation_id: str
 ) -> None:
     """
     Send SNS alert for critical failures.
@@ -346,7 +322,7 @@ async def send_critical_failure_alert(
 
     import os
 
-    topic_arn = os.getenv('SNS_ALERT_TOPIC_ARN')
+    topic_arn = os.getenv("SNS_ALERT_TOPIC_ARN")
     if not topic_arn:
         logger.warning("SNS_ALERT_TOPIC_ARN not configured, skipping alert")
         return
@@ -358,10 +334,10 @@ async def send_critical_failure_alert(
             "timestamp": int(time.time()),
             "correlation_id": correlation_id,
             "job_id": job_id,
-            "failure_type": failure_analysis['failure_type'],
-            "error_summary": failure_analysis['error_summary'],
-            "receive_count": failure_analysis['receive_count'],
-            "processing_duration": failure_analysis['processing_duration_seconds']
+            "failure_type": failure_analysis["failure_type"],
+            "error_summary": failure_analysis["error_summary"],
+            "receive_count": failure_analysis["receive_count"],
+            "processing_duration": failure_analysis["processing_duration_seconds"],
         }
 
         # Create human-readable message
@@ -387,23 +363,11 @@ Check CloudWatch logs for detailed information.
             Subject=subject,
             Message=message,
             MessageAttributes={
-                'alert_type': {
-                    'DataType': 'String',
-                    'StringValue': 'critical_job_failure'
-                },
-                'job_id': {
-                    'DataType': 'String',
-                    'StringValue': job_id
-                },
-                'failure_type': {
-                    'DataType': 'String',
-                    'StringValue': failure_analysis['failure_type']
-                },
-                'correlation_id': {
-                    'DataType': 'String',
-                    'StringValue': correlation_id
-                }
-            }
+                "alert_type": {"DataType": "String", "StringValue": "critical_job_failure"},
+                "job_id": {"DataType": "String", "StringValue": job_id},
+                "failure_type": {"DataType": "String", "StringValue": failure_analysis["failure_type"]},
+                "correlation_id": {"DataType": "String", "StringValue": correlation_id},
+            },
         )
 
         logger.info(f"Sent critical failure alert for job {job_id}: {response['MessageId']}")
@@ -423,7 +387,7 @@ def await_sync(coro):
 
     try:
         # Get the current event loop if it exists
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
         # If we're already in an async context, we shouldn't be here
         # This would indicate a design issue
         raise RuntimeError("await_sync called from within async context")

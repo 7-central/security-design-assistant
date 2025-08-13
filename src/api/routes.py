@@ -18,7 +18,6 @@ from src.api.models import (
 )
 from src.models.job import Job, JobStatus
 from src.storage.interface import StorageInterface
-from src.storage.local_storage import LocalStorage
 from src.utils.id_generator import generate_job_id
 from src.utils.pdf_processor import (
     CorruptedPDFError,
@@ -26,6 +25,7 @@ from src.utils.pdf_processor import (
     PasswordProtectedPDFError,
     PDFProcessor,
 )
+from src.utils.storage_manager import StorageManager
 from src.utils.validators import classify_context, validate_file_size, validate_pdf_file
 
 router = APIRouter()
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB in bytes
 
-# Initialize storage
-storage: StorageInterface = LocalStorage()
+# Initialize storage using StorageManager based on environment
+storage: StorageInterface = StorageManager.get_storage()
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -125,18 +125,18 @@ async def process_drawing(
         processing_time = (end_time - start_time).total_seconds()
 
         # Update job with metadata
-        job.update_metadata({
-            "file_name": drawing_file.filename,
-            "file_size_mb": round(file_size_mb, 2),
-            "total_pages": metadata.total_pages,
-            "pdf_type": metadata.pdf_type.value,
-            "processing_time_seconds": round(processing_time, 2)
-        })
+        job.update_metadata(
+            {
+                "file_name": drawing_file.filename,
+                "file_size_mb": round(file_size_mb, 2),
+                "total_pages": metadata.total_pages,
+                "pdf_type": metadata.pdf_type.value,
+                "processing_time_seconds": round(processing_time, 2),
+            }
+        )
 
         # Store extracted content in memory structure
-        processing_results = {
-            "pages": [page.to_dict() for page in pages]
-        }
+        processing_results = {"pages": [page.to_dict() for page in pages]}
         job.update_processing_results(processing_results)
 
         # Save file to storage
@@ -167,7 +167,7 @@ async def process_drawing(
                     context_file_content=context_file_content,
                     context_text=context_text,
                     mime_type=context_mime_type,
-                    filename=context_filename
+                    filename=context_filename,
                 )
 
                 if context_classification:
@@ -182,8 +182,7 @@ async def process_drawing(
                     if context_file:
                         # Save context file temporarily
                         with tempfile.NamedTemporaryFile(
-                            suffix=f".{context_classification['type']}",
-                            delete=False
+                            suffix=f".{context_classification['type']}", delete=False
                         ) as tmp_context:
                             tmp_context.write(context_file_content)
                             context_input["context_file_path"] = tmp_context.name
@@ -196,16 +195,15 @@ async def process_drawing(
 
                     # Process context with timeout
                     import asyncio
+
                     try:
                         context_result = await asyncio.wait_for(
                             context_agent.process(context_input),
-                            timeout=30.0  # 30 second timeout
+                            timeout=30.0,  # 30 second timeout
                         )
 
                         # Update job with context results
-                        job.update_processing_results({
-                            "context": context_result
-                        })
+                        job.update_processing_results({"context": context_result})
 
                         # Save checkpoint
                         await storage.save_job_status(job_id, job.to_dict())
@@ -230,7 +228,10 @@ async def process_drawing(
 
             # Process with Schedule Agent
             # Note: Context is loaded from checkpoint by the agent internally
-            schedule_input = {"pages": processing_results["pages"]}
+            schedule_input = {
+                "pages": processing_results["pages"],
+                "pdf_path": str(tmp_file_path) if tmp_file_path.exists() else None,
+            }
 
             agent_result = await schedule_agent.process(schedule_input)
 
@@ -268,13 +269,15 @@ async def process_drawing(
                         flattened_components.extend(page["components"])
 
             # Update job status after schedule agent
-            job.update_processing_results({
-                "schedule_agent": {
-                    "completed": True,
-                    "components": agent_result,  # Store the full result
-                    "flattened_components": flattened_components  # Store flattened for Excel
+            job.update_processing_results(
+                {
+                    "schedule_agent": {
+                        "completed": True,
+                        "components": agent_result,  # Store the full result
+                        "flattened_components": flattened_components,  # Store flattened for Excel
+                    }
                 }
-            })
+            )
 
             # Save intermediate state
             await storage.save_job_status(job_id, job.to_dict())
@@ -283,26 +286,24 @@ async def process_drawing(
             excel_agent = ExcelGenerationAgent(storage=storage, job=job)
 
             # Process with Excel Generation Agent
-            excel_result = await excel_agent.process({
-                "components": flattened_components
-            })
+            excel_result = await excel_agent.process({"components": flattened_components})
 
             # Update job with Excel generation results
-            job.update_processing_results({
-                "excel_generation": {
-                    "completed": excel_result.get("status") == "completed",
-                    "file_path": excel_result.get("file_path"),
-                    "summary": excel_result.get("summary", {})
+            job.update_processing_results(
+                {
+                    "excel_generation": {
+                        "completed": excel_result.get("status") == "completed",
+                        "file_path": excel_result.get("file_path"),
+                        "summary": excel_result.get("summary", {}),
+                    }
                 }
-            })
+            )
 
             # Update job metadata with Excel file path
             excel_file_path = None
             if excel_result.get("file_path"):
                 excel_file_path = excel_result.get("file_path")
-                job.update_metadata({
-                    "excel_file_path": excel_file_path
-                })
+                job.update_metadata({"excel_file_path": excel_file_path})
 
             # Save checkpoint before judge evaluation
             await storage.save_job_status(job_id, job.to_dict())
@@ -316,17 +317,19 @@ async def process_drawing(
                     "drawing_file": str(tmp_file_path) if tmp_file_path.exists() else None,
                     "context": context_result.get("context") if context_result else None,
                     "components": flattened_components,
-                    "excel_file": excel_file_path
+                    "excel_file": excel_file_path,
                 }
 
                 # Run evaluation
                 judge_result = await judge_agent.process(judge_input)
 
                 # Update job with evaluation results
-                job.update_processing_results({
-                    "evaluation": judge_result.get("evaluation", {}),
-                    "evaluation_metadata": judge_result.get("metadata", {})
-                })
+                job.update_processing_results(
+                    {
+                        "evaluation": judge_result.get("evaluation", {}),
+                        "evaluation_metadata": judge_result.get("metadata", {}),
+                    }
+                )
 
                 # Log evaluation summary
                 evaluation = judge_result.get("evaluation", {})
@@ -336,12 +339,9 @@ async def process_drawing(
             except Exception as e:
                 # Log but don't fail the job if judge evaluation fails
                 logger.error(f"Judge evaluation failed for job {job_id}: {e}")
-                job.update_processing_results({
-                    "evaluation": {
-                        "overall_assessment": "Evaluation failed",
-                        "error": str(e)
-                    }
-                })
+                job.update_processing_results(
+                    {"evaluation": {"overall_assessment": "Evaluation failed", "error": str(e)}}
+                )
 
             # Mark job as completed
             job.mark_completed(processing_time=(datetime.utcnow() - start_time).total_seconds())
@@ -352,7 +352,7 @@ async def process_drawing(
                 "job_id": job_id,
                 "status": job.status,
                 "estimated_time_seconds": 300,
-                "metadata": job.metadata
+                "metadata": job.metadata,
             }
 
             # Add file path and summary if Excel was generated
@@ -389,33 +389,23 @@ async def process_drawing(
         logger.error(f"Password protected PDF for job {job_id}: {e}")
         job.mark_failed("PDF is password protected")
         await storage.save_job_status(job_id, job.to_dict())
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
     except CorruptedPDFError as e:
         logger.error(f"Corrupted PDF for job {job_id}: {e}")
         job.mark_failed("PDF file is corrupted or invalid")
         await storage.save_job_status(job_id, job.to_dict())
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except MissingDependencyError as e:
         logger.error(f"Missing dependency for job {job_id}: {e}")
         job.mark_failed("System dependency missing: poppler-utils")
         await storage.save_job_status(job_id, job.to_dict())
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error processing PDF for job {job_id}: {e}", exc_info=True)
         job.mark_failed(f"Unexpected error: {type(e).__name__}")
         await storage.save_job_status(job_id, job.to_dict())
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to process PDF file"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process PDF file"
         ) from e
     finally:
         # Clean up temporary file
@@ -439,10 +429,7 @@ async def get_job_status(job_id: str):
     job_data = await storage.get_job_status(job_id)
 
     if not job_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found")
 
     # Build response with all relevant information
     response = {
@@ -477,7 +464,7 @@ async def get_job_status(job_id: str):
             component_count = len(schedule_results.get("flattened_components", []))
             response["summary"] = {
                 "doors_found": component_count,
-                "processing_time_seconds": job_data.get("processing_time")
+                "processing_time_seconds": job_data.get("processing_time"),
             }
 
     # Add evaluation results if available
@@ -487,7 +474,7 @@ async def get_job_status(job_id: str):
             "overall_assessment": evaluation.get("overall_assessment"),
             "completeness": evaluation.get("completeness"),
             "correctness": evaluation.get("correctness"),
-            "improvement_suggestions": evaluation.get("improvement_suggestions", [])
+            "improvement_suggestions": evaluation.get("improvement_suggestions", []),
         }
 
     # Add download links if files exist
@@ -518,10 +505,7 @@ async def download_excel(job_id: str):
         job_data = await storage.get_job_status(job_id)
 
         if not job_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found")
 
         # Check if Excel file was generated
         excel_path = job_data.get("metadata", {}).get("excel_file_path")
@@ -531,20 +515,16 @@ async def download_excel(job_id: str):
             excel_path = excel_generation.get("file_path")
 
         if not excel_path:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Excel file not found for job {job_id}"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Excel file not found for job {job_id}")
 
         # Check if file exists
         if not await storage.file_exists(excel_path):
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Excel file no longer exists for job {job_id}"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Excel file no longer exists for job {job_id}"
             )
 
         # For AWS storage, generate presigned URL
-        if hasattr(storage, 'generate_presigned_url'):
+        if hasattr(storage, "generate_presigned_url"):
             presigned_url = await storage.generate_presigned_url(excel_path)
             return RedirectResponse(url=presigned_url)
         else:
@@ -559,7 +539,7 @@ async def download_excel(job_id: str):
             return FileResponse(
                 path=tmp_path,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                filename=f"schedule_{job_id}.xlsx"
+                filename=f"schedule_{job_id}.xlsx",
             )
 
     except HTTPException:
@@ -567,8 +547,7 @@ async def download_excel(job_id: str):
     except Exception as e:
         logger.error(f"Error downloading Excel for job {job_id}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate download URL"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate download URL"
         ) from e
 
 
@@ -590,10 +569,7 @@ async def download_components(job_id: str):
         job_data = await storage.get_job_status(job_id)
 
         if not job_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found")
 
         # Get components from processing results
         processing_results = job_data.get("processing_results", {})
@@ -601,31 +577,24 @@ async def download_components(job_id: str):
         components = schedule_agent_results.get("components", [])
 
         if not components:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No components found for job {job_id}"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No components found for job {job_id}")
 
         # Convert to JSON
         import json
+
         components_json = json.dumps(components, indent=2)
 
         # Save to temp file for FileResponse
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode='w') as tmp_file:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp_file:
             tmp_file.write(components_json)
             tmp_path = tmp_file.name
 
-        return FileResponse(
-            path=tmp_path,
-            media_type="application/json",
-            filename=f"components_{job_id}.json"
-        )
+        return FileResponse(path=tmp_path, media_type="application/json", filename=f"components_{job_id}.json")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error downloading components for job {job_id}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to download components"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to download components"
         ) from e
