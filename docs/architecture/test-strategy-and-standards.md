@@ -1,158 +1,167 @@
-# Test Strategy and Standards
+# Test Strategy and Standards (Simplified)
 
 ## Testing Philosophy
 
-**Pragmatic real-world validation over comprehensive mocking**
+**Local validation with real services over complex automation**
 
-Our testing approach prioritizes practical validation with real services over complex mocking infrastructure. This ensures we catch actual issues that affect production while maintaining a manageable test suite.
+Our testing approach has been simplified to match the single-user nature of this application. We prioritize fast local validation and manual testing over complex automated pipelines.
 
 ### Core Principles
-- Unit tests provide foundation for business logic validation
-- E2E tests validate actual system behavior with real APIs
-- No complex mocking infrastructure to maintain
-- Focus on critical paths, not coverage metrics
+- Unit tests validate business logic with mocks
+- Manual testing validates real system behavior
+- No CI/CD pipeline - all tests run locally
+- Focus on developer productivity over coverage metrics
 
-### Test Distribution
-- **90% Unit Tests**: Fast, isolated tests for business logic
-- **10% E2E Tests**: Real API validation for critical paths
-
-## Test Types and Organization
+## Test Types
 
 ### Unit Tests
 
 - **Framework:** pytest 8.0.0
-- **File Convention:** `test_<module_name>.py` in parallel directory structure
-- **Location:** `tests/unit/<module_path>/`
-- **Mocking Library:** pytest-mock with unittest.mock for AI responses
-- **Coverage Requirement:** 80% minimum per module
+- **Location:** `tests/unit/`
+- **Mocking:** pytest-mock for external dependencies
+- **Execution:** `pytest tests/unit -m unit -v`
+- **Purpose:** Fast validation of business logic
 
-**AI Agent Requirements:**
-- Generate tests for all public methods
-- Cover edge cases and error conditions
-- Follow AAA pattern (Arrange, Act, Assert)
-- Mock all external dependencies
-- Mock Gemini API responses using unittest.mock
+**What We Test:**
+- Core business logic
+- Data transformations
+- Error handling
+- Agent behavior (with mocked APIs)
 
-### E2E Tests (Replacing Integration Tests)
+**What We Mock:**
+- Gemini API calls
+- AWS S3/DynamoDB operations
+- External HTTP requests
+- File system operations
 
-- **Scope:** Real end-to-end pipeline validation
-- **Location:** `tests/e2e/`
-- **Test Infrastructure (Updated per Story 4.3.1):**
-  - **Gemini API:** Real API calls (test account)
-  - **AWS Services:** Dev resources for local testing
-    - S3: `security-assistant-dev-445567098699`
-    - DynamoDB: `security-assistant-dev-jobs`
-  - **Local Execution:** FastAPI server with dev AWS resources
-  - **PDF Processing:** Test fixtures with actual API processing
-  - **Execution:** `pytest -m e2e` locally or automated in CI/CD
+### Manual Testing (Replaced E2E Tests)
 
-### Simplified Test Execution
+- **Tool:** Swagger UI at http://localhost:8000/docs
+- **Storage:** Dev AWS resources (S3 + DynamoDB)
+- **Execution:** Upload test PDFs and verify results
+- **Purpose:** Validate full pipeline with real services
 
-- **Framework:** pytest with minimal configuration
-- **Unit Tests:** Fast, mocked dependencies, run frequently
-- **E2E Tests:** Real APIs, run on-demand or in CI/CD
-- **Test Data:** Reuse drawing variations from Story 4.2 in `tests/fixtures/drawings/`
+**Test Process:**
+1. Start server with `./test_local.sh`
+2. Upload test PDF via Swagger UI
+3. Verify job completes successfully
+4. Download and check Excel output
+5. Verify S3/DynamoDB entries if needed
 
-## Test Data Management
+## Test Execution
 
-- **Strategy:** Fixture-based with version control
-- **Fixtures:** `tests/fixtures/` organized by type
-- **Factories:** Not needed for Phase 1 (static test data)
-- **Cleanup:** Automatic via pytest fixtures and AWS TTL
+### Complete Test Suite
+```bash
+./test_local.sh
+```
+This script:
+1. Runs type checking (mypy)
+2. Runs linting (ruff)
+3. Runs unit tests
+4. Starts server for manual testing
 
-## Continuous Testing
+### Quick Validation
+```bash
+# Type checking and linting only
+./scripts/validate_types.sh
 
-- **CI Integration (Updated per Story 4.3.1):** 
-  - Unit tests on every commit (<10 seconds)
-  - E2E tests on PR to develop branch (using dev AWS resources)
-  - Full deployment tests on merge to main
-- **GitHub Actions Workflows:**
-  - `.github/workflows/ci.yml` - Feature branch testing
-  - `.github/workflows/deploy-dev.yml` - Dev deployment
-  - `.github/workflows/deploy-prod.yml` - Production deployment
-- **Performance Tests:** Manual benchmark suite (future phase)
-- **Security Tests:** Dependency scanning via GitHub Dependabot
-
-## AI Test Generation Guidelines
-
-**AI agents must follow these rules when writing tests:**
-
-1. **Test public interfaces only** - Never test private methods or internal state
-2. **Mock AI responses** - Use unittest.mock for Gemini API calls
-3. **Test business outcomes** - "Found 10 doors" not "Called API 3 times"
-4. **Follow naming pattern** - `test_<agent>_<action>_<expected_outcome>`
-5. **Include domain context** - Test security-specific edge cases (empty legend, overlapping symbols)
-6. **Mock hygiene** - Clear, descriptive mock setups with realistic responses
-7. **No random data** - Use deterministic fixtures from `tests/fixtures/`
-
-**Good test example:**
-```python
-@patch('src.agents.schedule_agent_v2.genai.Client')
-def test_schedule_agent_extracts_door_components(mock_client):
-    """Test that schedule agent correctly identifies access control components."""
-    # Setup mock response
-    mock_response = Mock()
-    mock_response.text = json.dumps({
-        'components': [
-            {'id': 'A-101', 'type': 'door', 'location': 'Main entrance'},
-            {'id': 'A-101-R', 'type': 'reader', 'location': 'Main entrance'}
-        ]
-    })
-    mock_client.return_value.models.generate_content.return_value = mock_response
-    
-    agent = ScheduleAgentV2(storage=Mock(), job=Mock())
-    test_drawing = "tests/fixtures/drawings/simple_access_control.pdf"
-    components = agent.extract_components(test_drawing)
-    
-    assert len(components) == 2
-    assert all(c['type'] in ['door', 'reader', 'exit_button'] for c in components)
-    assert all(c['id'].startswith('A-') for c in components)
+# Unit tests only
+pytest tests/unit -m unit -v
 ```
 
-## Critical Test Scenarios by Agent
+### Manual Testing Checklist
+- [ ] Upload simple door schedule PDF
+- [ ] Upload complex multi-page drawing
+- [ ] Test with context file
+- [ ] Verify Excel output correctness
+- [ ] Check error handling (invalid PDF)
 
-**Note:** These are automated test specifications for developers. Before implementing these tests, test fixture documents must be created or collected. Most can be simple examples or generated samples. The test suite uses unittest.mock to simulate AI responses for consistent, fast testing.
+## Quality Gates
 
-### Context Agent Test Cases
-1. **Parse simple DOCX with lock specifications** - Extract lock types 11-22 from tables
-2. **Handle multi-section specifications** - Correctly identify relevant vs irrelevant sections
-3. **Process scanned PDF context** - Use Gemini Flash for OCR and extraction
-4. **Empty context document** - Gracefully handle files with no relevant content
-5. **Malformed document** - Error handling for corrupted files
-6. **Large context file** - Performance with 100+ page specifications
+### Pre-Push Hook
+Automatically runs before git push:
+- Type checking with mypy (strict mode)
+- Linting with ruff
+- Blocks push if validation fails
 
-### Schedule Agent Test Cases
-1. **Standard single-page drawing** - Extract all A-prefix components correctly
-2. **Multi-page mixed systems** - Filter security pages from electrical/plumbing
-3. **Dense overlapping annotations** - Handle text overlap near door symbols
-4. **Non-standard component IDs** - Recognize variations like A.101.DR.B2
-5. **Missing door labels** - Infer door locations from reader/button placement
-6. **Rotated/skewed pages** - Process drawings at various orientations
-7. **Poor scan quality** - Low resolution or grainy images
-8. **Empty drawing legend** - Work without symbol definitions
-9. **Duplicate component IDs** - Handle naming conflicts
-10. **CCTV/Intruder mixed drawing** - Correctly ignore C- and I- prefix items
+### Local Development
+- Run `./scripts/validate_types.sh` frequently
+- Run unit tests after significant changes
+- Manual test before pushing to main
 
-### Code Generation Agent Test Cases
-1. **Standard door schedule** - Generate Excel with all required columns
-2. **Dynamic lock type columns** - Add columns based on found lock types
-3. **Missing components** - Handle doors without readers or exit buttons
-4. **Special formatting requests** - Apply conditional formatting for lock types
-5. **Large component sets** - Performance with 200+ doors
-6. **Unicode in locations** - Handle international characters in door names
-7. **Summary calculations** - Correct totals and subtotals
-8. **Empty component list** - Graceful handling of no components found
+## Test Data
 
-### Judge Agent Test Cases
-1. **High-accuracy extraction** - Recognize and praise good results
-2. **Missed components** - Identify specific missing items
-3. **False positives** - Detect incorrectly identified components
-4. **Partial success** - Balanced evaluation of mixed results
-5. **Context alignment** - Verify specifications were applied correctly
-6. **Spatial relationship errors** - Detect wrong door-reader associations
-7. **Improvement suggestions** - Provide actionable feedback
+### Test PDFs
+Located in `tests/fixtures/drawings/`:
+- `simple_door_schedule.pdf` - Basic test case
+- `complex_e1_drawing.pdf` - Complex components
+- `b2_level_plan.pdf` - Multi-page test
+- `variations/` - Edge cases
 
-### E2E Test Scenarios (Simplified)
-1. **Happy path full pipeline** - Drawing → Context → Extract → Excel with real APIs
-2. **Error handling** - Invalid PDF rejection with proper error messages
-3. **Consistency validation** - Same drawing 3 times, verify <5% variance
+### Dev AWS Resources
+- **S3 Bucket:** `security-assistant-dev-445567098699`
+- **DynamoDB:** `security-assistant-dev-jobs`
+- **Lifecycle:** 7-day auto-deletion
+- **Cost:** <$1/month
+
+## What We DON'T Do Anymore
+
+### Removed Complexity
+- ❌ **E2E test automation** - Manual testing is sufficient
+- ❌ **CI/CD test execution** - Tests run locally only
+- ❌ **Coverage requirements** - Quality over metrics
+- ❌ **Integration tests** - Either unit or manual
+- ❌ **Staging validation** - Test with dev storage
+
+### Why We Simplified
+- Single-user application
+- Quick fix and redeploy capability
+- Manual testing takes <5 minutes
+- Automation maintenance exceeded value
+
+## When to Add Complexity
+
+### Add E2E Automation When:
+- API grows beyond 10 endpoints
+- Multiple users require stability
+- Manual testing takes >15 minutes
+- Regression bugs become frequent
+
+### Add CI/CD Testing When:
+- Multiple developers contribute
+- External users depend on service
+- Deployment frequency increases
+- Quality issues emerge
+
+## Best Practices
+
+### Writing Unit Tests
+```python
+def test_component_extraction():
+    """Test that components are correctly extracted from page data."""
+    # Arrange
+    mock_response = {"components": [...]}
+    
+    # Act
+    result = extract_components(mock_response)
+    
+    # Assert
+    assert len(result) == 5
+    assert result[0].type == "door"
+```
+
+### Manual Testing Discipline
+1. Always test after significant changes
+2. Use consistent test data
+3. Document unexpected behaviors
+4. Verify both success and error paths
+
+## Summary
+
+Our simplified test strategy acknowledges that:
+- **Quality doesn't require complexity**
+- **Manual testing is valid for small apps**
+- **Local validation catches most issues**
+- **Single-user apps have different needs**
+
+The focus is on maintaining code quality through local validation while avoiding the overhead of complex test automation that provides minimal value for a single-user application.
